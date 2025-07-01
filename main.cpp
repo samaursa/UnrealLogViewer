@@ -8,6 +8,7 @@ Component LogViewer::CreateUI() {
     auto manager = std::make_shared<InputManager>();
     manager->AddInputWindow(0, "FILE", &file_path_, "Enter file path...");
     manager->AddInputWindow(1, "SEARCH", &search_term_, "Search logs...");
+    manager->AddLogWindow(2, "LOG");
 
     auto component = manager->CreateComponent();
 

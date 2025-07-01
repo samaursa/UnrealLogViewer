@@ -3,22 +3,32 @@
 using namespace ftxui;
 
 void InputManager::AddInputWindow(int id, const std::string& title, std::string* content, const std::string& placeholder) {
-    windows_.push_back(std::make_unique<InputWindow>(id, title, content, placeholder));
+    input_windows_.push_back(std::make_unique<InputWindow>(id, title, content, placeholder));
+}
+
+void InputManager::AddLogWindow(int id, const std::string& title) {
+    log_window_ = std::make_unique<LogWindow>(id, title);
 }
 
 Component InputManager::CreateComponent() {
     Components components;
-    for (auto& window : windows_) {
+    for (auto& window : input_windows_) {
         components.push_back(window->GetComponent());
     }
 
     auto container = Container::Vertical(components);
 
     container |= CatchEvent([this](Event event) {
+        // Log window always handles arrow keys and page up/down
+        if (log_window_ && log_window_->HandleEvent(event)) {
+            return true;
+        }
+
         // Window switching
         if (event.is_character()) {
             char c = event.character()[0];
-            if (switcher_.HandleWindowSwitch(c, windows_.size())) {
+            int total_windows = input_windows_.size() + (log_window_ ? 1 : 0);
+            if (switcher_.HandleWindowSwitch(c, total_windows)) {
                 return true;
             }
         }
@@ -27,8 +37,8 @@ Component InputManager::CreateComponent() {
         if (event == Event::Return) {
             escape_pressed_ = false;
             int selected = switcher_.GetSelectedWindow();
-            if (selected < windows_.size()) {
-                windows_[selected]->TakeFocus();
+            if (selected < input_windows_.size()) {
+                input_windows_[selected]->TakeFocus();
             }
             return true;
         }
@@ -52,8 +62,13 @@ Element InputManager::Render() const {
     Elements elements;
     int selected = switcher_.GetSelectedWindow();
 
-    for (int i = 0; i < windows_.size(); ++i) {
-        elements.push_back(windows_[i]->Render(i == selected, escape_pressed_));
+    for (int i = 0; i < input_windows_.size(); ++i) {
+        elements.push_back(input_windows_[i]->Render(i == selected, escape_pressed_));
+    }
+
+    if (log_window_) {
+        int log_id = input_windows_.size();
+        elements.push_back(log_window_->Render(selected == log_id));
     }
 
     elements.push_back(text("Window: " + std::to_string(selected) +
