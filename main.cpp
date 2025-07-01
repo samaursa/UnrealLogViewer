@@ -9,6 +9,7 @@ Component LogViewer::CreateUI() {
     manager->AddInputWindow(0, "FILE", &file_path_, "Enter file path...");
     manager->AddInputWindow(1, "SEARCH", &search_term_, "Search logs...");
     manager->AddLogWindow(2, "LOG");
+    manager->AddExpandedWindow(3, "EXPANDED");
 
     auto component = manager->CreateComponent();
 
