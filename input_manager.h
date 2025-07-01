@@ -1,0 +1,20 @@
+#pragma once
+#include "input_window.h"
+#include "window_switcher.h"
+#include "ftxui/component/component.hpp"
+#include <vector>
+#include <memory>
+
+class InputManager {
+private:
+    std::vector<std::unique_ptr<InputWindow>> windows_;
+    WindowSwitcher switcher_;
+    bool escape_pressed_;
+
+public:
+    InputManager() : escape_pressed_(false) {}
+
+    void AddInputWindow(int id, const std::string& title, std::string* content, const std::string& placeholder);
+    ftxui::Component CreateComponent();
+    ftxui::Element Render() const;
+};

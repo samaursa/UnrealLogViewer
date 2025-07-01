@@ -24,16 +24,18 @@ add_executable(unreal_log_viewer
   filter_manager.cpp
   log_viewer.cpp
   ui_renderer.cpp
-  focusable_window.cpp
-  window_manager.cpp
+  input_window.cpp
+  window_switcher.cpp
+  input_manager.cpp
 
   # Header files for IDE support
   log_entry.h
   filter_manager.h
   log_viewer.h
   ui_renderer.h
-  focusable_window.h
-  window_manager.h
+  input_window.h
+  window_switcher.h
+  input_manager.h
 )
 
 # Link FTXUI libraries
