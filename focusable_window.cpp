@@ -1,10 +1,12 @@
 #include "focusable_window.h"
+#include "window_manager.h"
 #include <algorithm>
 
 using namespace ftxui;
 
-FocusableWindow::FocusableWindow(int id, const std::string& title, std::function<int()> get_focused_id, std::function<void(int)> set_focused_id)
-    : id_(id), title_(title), get_focused_id_(get_focused_id), set_focused_id_(set_focused_id) {
+FocusableWindow::FocusableWindow(int id, const std::string& title, WindowManager* wm)
+    : id_(id), title_(title), window_manager_(wm) {
+
     container_ = Container::Vertical({});
 
     container_ |= CatchEvent([this](Event event) {
@@ -23,26 +25,29 @@ void FocusableWindow::SetEventHandler(std::function<bool(Event)> handler) {
     event_handler_ = handler;
 }
 
+void FocusableWindow::AddComponent(Component component) {
+    container_->Add(component);
+}
+
 bool FocusableWindow::IsFocused() const {
-    return get_focused_id_() == id_;
+    return window_manager_ && window_manager_->GetFocusedWindowId() == id_;
 }
 
 void FocusableWindow::TakeFocus() {
-    set_focused_id_(id_);
+    if (window_manager_) {
+        window_manager_->SetFocusedWindow(id_);
+    }
     container_->TakeFocus();
 }
 
 Element FocusableWindow::Render() const {
-    std::string display_title = "[" + std::to_string(id_) + "] " +
-        (IsFocused() ? title_ : title_);
+    std::string display_title = "[" + std::to_string(id_) + "] " + title_;
 
-    // Convert to uppercase when focused
     if (IsFocused()) {
         std::transform(display_title.begin(), display_title.end(),
                       display_title.begin(), ::toupper);
     }
 
     Element content = content_renderer_ ? content_renderer_() : text("Empty window");
-
     return window(text(display_title), content);
 }

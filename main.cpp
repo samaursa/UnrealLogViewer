@@ -1,126 +1,76 @@
 ﻿#include "log_viewer.h"
-#include "window_manager.h"
 #include "ftxui/component/screen_interactive.hpp"
-#include "ftxui/screen/terminal.hpp"
 
 using namespace ftxui;
 
 Component LogViewer::CreateUI() {
-    auto wm = std::make_shared<WindowManager>();
+    auto file_input = Input(&file_path_, "Enter file path...");
+    auto search_input = Input(&search_term_, "Search logs...");
+    auto container = Container::Vertical({file_input, search_input});
 
-    // Create windows
-    auto file_window = wm->AddWindow(0, "File");
-    auto search_window = wm->AddWindow(1, "Search");
-    auto log_window = wm->AddWindow(2, "Log");
-    auto categories_window = wm->AddWindow(3, "Categories");
-    auto expanded_window = wm->AddWindow(4, "Expanded");
-
-    // Set content renderers
-    file_window->SetContentRenderer([this] {
-        return vbox({
-            text("Enter file path here"),
-            text("Status: " + (selected_window_ == 0 ? std::string("FOCUSED") : std::string("unfocused")))
-        });
-    });
-
-    search_window->SetContentRenderer([this] {
-        return vbox({
-            text("Enter search terms here"),
-            text("Status: " + (selected_window_ == 1 ? std::string("FOCUSED") : std::string("unfocused")))
-        });
-    });
-
-    log_window->SetContentRenderer([this] {
-        return vbox({
-            text("Time | Category | Level | Message"),
-            text("Log entries will appear here"),
-            text("Line: " + std::to_string(selected_line_)),
-            text("Status: " + (selected_window_ == 2 ? std::string("FOCUSED") : std::string("unfocused")))
-        });
-    });
-
-    categories_window->SetContentRenderer([this] {
-        return vbox({
-            text("Category filters:"),
-            text("[ ] LogTemp"),
-            text("[x] LogCore"),
-            text("[ ] LogWarning"),
-            text("Status: " + (selected_window_ == 3 ? std::string("FOCUSED") : std::string("unfocused")))
-        });
-    });
-
-    expanded_window->SetContentRenderer([this] {
-        return vbox({
-            text("Selected log line details:"),
-            text("Raw: Full log line content here"),
-            text("Category: LogTemp"),
-            text("Time: 12:34:56"),
-            text("Status: " + (selected_window_ == 4 ? std::string("FOCUSED") : std::string("unfocused")))
-        });
-    });
-
-    // Set event handlers
-    log_window->SetEventHandler([this](Event event) {
-        if (selected_window_ == 2) {
-            if (event == Event::ArrowUp) {
-                selected_line_ = std::max(0, selected_line_ - 1);
+    container |= CatchEvent([this, file_input, search_input](Event event) {
+        // Window switching
+        if (event.is_character()) {
+            char c = event.character()[0];
+            if (c >= '0' && c <= '1') {
+                selected_window_ = c - '0';
                 return true;
             }
-            if (event == Event::ArrowDown) {
-                selected_line_++;
-                return true;
+        }
+
+        // Enter focuses the correct input based on selected window
+        if (event == Event::Return) {
+            escape_pressed_ = false;
+            if (selected_window_ == 0) {
+                file_input->TakeFocus();
+            } else if (selected_window_ == 1) {
+                search_input->TakeFocus();
             }
+            return true;
+        }
+        if (escape_pressed_) {
+            return true;
+        }
+        if (event == Event::Escape) {
+            escape_pressed_ = true;
+            return true;
         }
         return false;
     });
 
-    // Update selected_window_ when focus changes
-    auto main_container = wm->GetMainContainer();
-    main_container |= CatchEvent([this, wm](Event event) {
-        selected_window_ = wm->GetFocusedWindowId();
-        return false;
-    });
+    return Renderer(container, [this, file_input, search_input] {
+        auto file_element = escape_pressed_ ?
+            text(file_path_.empty() ? "Enter file path..." : file_path_) | color(Color::GrayDark) :
+            file_input->Render();
 
-    return Renderer(main_container, [wm, file_window, search_window, log_window,
-                                   categories_window, expanded_window, this] {
-        auto screen_size = Terminal::Size();
-        int height = screen_size.dimy;
+        auto search_element = escape_pressed_ ?
+            text(search_term_.empty() ? "Search logs..." : search_term_) | color(Color::GrayDark) :
+            search_input->Render();
 
-        // Render all windows with layout
-        auto file_content = file_window->Render() | size(HEIGHT, EQUAL, height / 12);
-        auto search_content = search_window->Render() | size(HEIGHT, EQUAL, height / 12);
-        auto log_content = log_window->Render() | flex;
-        auto categories_content = categories_window->Render() | size(WIDTH, EQUAL, screen_size.dimx * 3 / 10);
-        auto expanded_content = expanded_window->Render() | size(HEIGHT, EQUAL, height / 3);
-
-        auto status_bar = hbox({
-            text("Focus: "),
-            text(selected_window_ == -1 ? "NONE" : std::to_string(selected_window_)),
-            text(" | ESC: Clear | 0:File 1:Search 2:Log 3:Categories 4:Expanded")
-        }) | border;
+        auto file_title = selected_window_ == 0 ? "[0] FILE" : "[0] file";
+        auto search_title = selected_window_ == 1 ? "[1] SEARCH" : "[1] search";
 
         return vbox({
-            hbox({
-                vbox({
-                    file_content,
-                    search_content
-                }) | flex,
-                categories_content
-            }) | size(HEIGHT, EQUAL, height / 6),
-            hbox({
-                vbox({
-                    log_content,
-                    expanded_content
-                }) | flex,
-                text("") | size(WIDTH, EQUAL, screen_size.dimx * 3 / 10)
-            }) | flex,
-            status_bar
-        });
+            window(text(file_title), vbox({
+                hbox({
+                    text("File: "),
+                    file_element | flex
+                }),
+                text("Path: " + file_path_)
+            })),
+            window(text(search_title), vbox({
+                hbox({
+                    text("Search: "),
+                    search_element | flex
+                }),
+                text("Term: " + search_term_)
+            })),
+            text("Window: " + std::to_string(selected_window_) + " | Focus: " + std::string(escape_pressed_ ? "OFF" : "ON"))
+        }) | border;
     });
 }
 
 void LogViewer::Run() {
-    std::cout << "\033]0;Unreal Log Viewer\007" << std::flush;
     auto screen = ScreenInteractive::TerminalOutput();
     screen.Loop(CreateUI());
 }

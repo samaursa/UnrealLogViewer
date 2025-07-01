@@ -13,12 +13,12 @@ public:
     WindowManager();
 
     FocusableWindow* AddWindow(int id, const std::string& title);
-    void SetLayout(std::function<ftxui::Element()> layout_renderer);
 
     ftxui::Component GetMainContainer() const { return main_container_; }
 
     void FocusWindow(int id);
     void ClearFocus();
+    void SetFocusedWindow(int id) { focused_window_id_ = id; }
 
     FocusableWindow* GetWindow(int id);
     int GetFocusedWindowId() const { return focused_window_id_; }

@@ -26,14 +26,10 @@ WindowManager::WindowManager() : focused_window_id_(-1) {
 }
 
 FocusableWindow* WindowManager::AddWindow(int id, const std::string& title) {
-    auto window = std::make_unique<FocusableWindow>(
-        id,
-        title,
-        [this]() { return focused_window_id_; },
-        [this](int id) { focused_window_id_ = id; }
-    );
+    auto window = std::make_unique<FocusableWindow>(id, title, this);
     FocusableWindow* ptr = window.get();
     windows_.push_back(std::move(window));
+    main_container_->Add(ptr->GetContainer());
     return ptr;
 }
 

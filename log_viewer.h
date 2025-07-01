@@ -36,6 +36,7 @@ private:
     // Performance optimization
     bool needs_filter_update_ = true;
     std::string last_search_term_;
+    bool escape_pressed_ = false;
 
 public:
     ~LogViewer();
