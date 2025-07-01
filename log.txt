@@ -1,0 +1,4 @@
+[2025.06.30-12:34:56:789][  1]LogInit: Display: Running engine for game: MyGame
+[2025.06.30-12:34:56:789][  1]LogInit: Display: Project file not found: ../../../MyGame/MyGame.uproject
+[2025.06.30-12:34:56:789][  1]LogInit: Display:     Attempting to find engine content directory
+[2025.06.30-12:34:57:123][  1]LogUObjectGlobals: Warning: Failed to find object 'Class /Script/Engine.Default__PlayerInput' a

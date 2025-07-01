@@ -1,0 +1,14 @@
+15:48:39:100	1>D:\Repos\UnrealLogViewer\src\FilterComponent.cpp(12,46): error C2064: term does not evaluate to a function taking 0 arguments
+15:48:39:100	1>D:\Repos\UnrealLogViewer\src\FilterComponent.cpp(12,28): error C2672: 'std::max': no matching overloaded function found
+15:48:39:100	1>D:\Repos\UnrealLogViewer\src\FilterComponent.cpp(13,46): error C2064: term does not evaluate to a function taking 0 arguments
+15:48:39:100	1>D:\Repos\UnrealLogViewer\src\FilterComponent.cpp(13,28): error C2672: 'std::max': no matching overloaded function found
+15:48:39:100	1>D:\Repos\UnrealLogViewer\src\FilterComponent.cpp(14,46): error C2064: term does not evaluate to a function taking 0 arguments
+15:48:39:100	1>D:\Repos\UnrealLogViewer\src\FilterComponent.cpp(14,28): error C2672: 'std::max': no matching overloaded function found
+15:48:39:100	1>D:\Repos\UnrealLogViewer\src\FilterComponent.cpp(12,19): error C2660: 'ftxui::Color::RGB': function does not take 1 arguments
+15:48:39:100	1>D:\Repos\UnrealLogViewer\src\FilterComponent.cpp(71,43): error C2039: 'children': is not a member of 'ftxui::ComponentBase'
+15:48:39:100	1>D:\Repos\UnrealLogViewer\src\FilterComponent.cpp(71,3): error C2530: 'child': references must be initialized
+15:48:39:100	1>D:\Repos\UnrealLogViewer\src\FilterComponent.cpp(71,3): error C3531: 'child': a symbol whose type contains 'auto' must have an initializer
+15:48:39:100	1>D:\Repos\UnrealLogViewer\src\FilterComponent.cpp(71,20): error C2143: syntax error: missing ';' before ':'
+15:48:39:100	1>D:\Repos\UnrealLogViewer\src\FilterComponent.cpp(71,53): error C2143: syntax error: missing ';' before ')'
+15:48:39:100	1>D:\Repos\UnrealLogViewer\src\FilterComponent.cpp(77,40): error C2039: 'indent': is not a member of 'ftxui'
+15:48:39:100	1>D:\Repos\UnrealLogViewer\src\FilterComponent.cpp(77,40): error C3861: 'indent': identifier not found
