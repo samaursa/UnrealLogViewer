@@ -4,7 +4,7 @@
 using namespace ftxui;
 
 LogWindow::LogWindow(int id, const std::string& title)
-    : id_(id), title_(title), selected_line_(0), scroll_offset_(0), log_entries_(nullptr) {}
+    : id_(id), title_(title), selected_line_(0), scroll_offset_(0), log_entries_(nullptr), filtered_indices_(nullptr) {}
 
 void LogWindow::SetLogEntries(const std::vector<LogEntry>* entries) {
     log_entries_ = entries;
@@ -12,8 +12,15 @@ void LogWindow::SetLogEntries(const std::vector<LogEntry>* entries) {
     scroll_offset_ = 0;
 }
 
+void LogWindow::SetFilteredEntries(const std::vector<size_t>* filtered_indices) {
+    filtered_indices_ = filtered_indices;
+    selected_line_ = 0;
+    scroll_offset_ = 0;
+}
+
 bool LogWindow::HandleEvent(Event event) {
-    int total_logs = log_entries_ ? log_entries_->size() : 0;
+    int total_logs = filtered_indices_ ? filtered_indices_->size() :
+                     (log_entries_ ? log_entries_->size() : 0);
     if (total_logs == 0) return false;
 
     if (event == Event::ArrowUp && selected_line_ > 0) {
@@ -69,10 +76,16 @@ bool LogWindow::HandleEvent(Event event) {
 }
 
 const LogEntry* LogWindow::GetSelectedEntry() const {
-    if (!log_entries_ || selected_line_ >= log_entries_->size()) {
-        return nullptr;
-    }
-    return &(*log_entries_)[selected_line_];
+    if (!log_entries_) return nullptr;
+
+    int total_filtered = filtered_indices_ ? filtered_indices_->size() : log_entries_->size();
+    if (selected_line_ >= total_filtered) return nullptr;
+
+    size_t entry_idx = filtered_indices_ ?
+        (*filtered_indices_)[selected_line_] : selected_line_;
+
+    if (entry_idx >= log_entries_->size()) return nullptr;
+    return &(*log_entries_)[entry_idx];
 }
 
 Element LogWindow::Render(bool is_selected, int available_height) const {
@@ -121,10 +134,15 @@ Element LogWindow::Render(bool is_selected, int available_height) const {
         log_lines.push_back(text("No log entries loaded"));
     } else {
         for (int i = 0; i < visible_lines; ++i) {
-            int line_idx = scroll_offset_ + i;
-            if (line_idx >= log_entries_->size()) break;
+            int display_idx = scroll_offset_ + i;
+            int total_filtered = filtered_indices_ ? filtered_indices_->size() : log_entries_->size();
+            if (display_idx >= total_filtered) break;
 
-            const auto& entry = (*log_entries_)[line_idx];
+            // Get actual entry index
+            size_t entry_idx = filtered_indices_ ?
+                (*filtered_indices_)[display_idx] : display_idx;
+
+            const auto& entry = (*log_entries_)[entry_idx];
 
             // Truncate fields to fit columns
             std::string time_str = entry.timestamp.length() > 12 ?
@@ -148,7 +166,7 @@ Element LogWindow::Render(bool is_selected, int available_height) const {
                 text(entry.message) | flex,
             });
 
-            if (line_idx == selected_line_) {
+            if (display_idx == selected_line_) {
                 row = row | inverted;
             }
 
@@ -156,7 +174,8 @@ Element LogWindow::Render(bool is_selected, int available_height) const {
         }
     }
 
-    int total = log_entries_ ? log_entries_->size() : 0;
+    int total = filtered_indices_ ? filtered_indices_->size() :
+                (log_entries_ ? log_entries_->size() : 0);
 
     auto table_content = vbox(log_lines);
 

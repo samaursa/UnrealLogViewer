@@ -11,11 +11,13 @@ private:
     int selected_line_;
     int scroll_offset_;
     const std::vector<LogEntry>* log_entries_;
+    const std::vector<size_t>* filtered_indices_;
 
 public:
     LogWindow(int id, const std::string& title);
 
     void SetLogEntries(const std::vector<LogEntry>* entries);
+    void SetFilteredEntries(const std::vector<size_t>* filtered_indices);
     bool HandleEvent(ftxui::Event event);
     ftxui::Element Render(bool is_selected, int available_height = 15) const;
 

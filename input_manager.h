@@ -15,6 +15,7 @@ private:
     WindowSwitcher switcher_;
     bool escape_pressed_;
     std::string debug_message_;
+    std::string* search_term_;
 
 public:
     InputManager() : escape_pressed_(false) {}
@@ -24,6 +25,8 @@ public:
     void AddExpandedWindow(int id, const std::string& title);
     void SetFileLoadCallback(std::function<void()> callback);
     void SetLogEntries(const std::vector<LogEntry>* entries);
+    void SetSearchCallback(std::function<void(const std::string&)> callback);
+    void SetSearchTerm(std::string* search_term);
     void SetDebugMessage(const std::string& message);
     LogWindow* GetLogWindow() const { return log_window_.get(); }
     ftxui::Component CreateComponent();
@@ -31,4 +34,5 @@ public:
 
 private:
     std::function<void()> file_load_callback_;
+    std::function<void(const std::string&)> search_callback_;
 };

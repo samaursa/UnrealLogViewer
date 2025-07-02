@@ -16,12 +16,29 @@ Component LogViewer::CreateUI() {
     manager->AddLogWindow(2, "LOG");
     manager->AddExpandedWindow(3, "EXPANDED");
 
+    // Set search term reference
+    manager->SetSearchTerm(&search_term_);
+
     // Set file load callback
     manager->SetFileLoadCallback([this, manager]() {
         manager->SetDebugMessage("Loading file: " + file_path_);
         LoadFile();
         manager->SetDebugMessage("Loaded " + std::to_string(log_entries_.size()) + " entries");
         manager->SetLogEntries(&log_entries_);
+        UpdateFilteredEntries();
+        if (auto* log_window = manager->GetLogWindow()) {
+            log_window->SetFilteredEntries(&filtered_indices_);
+        }
+    });
+
+    // Set search callback
+    manager->SetSearchCallback([this, manager](const std::string& term) {
+        search_term_ = term;
+        UpdateFilteredEntries();
+        if (auto* log_window = manager->GetLogWindow()) {
+            log_window->SetFilteredEntries(&filtered_indices_);
+        }
+        manager->SetDebugMessage("Search: " + std::to_string(filtered_indices_.size()) + " matches");
     });
 
     auto component = manager->CreateComponent();

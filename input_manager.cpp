@@ -25,6 +25,14 @@ void InputManager::SetLogEntries(const std::vector<LogEntry>* entries) {
     }
 }
 
+void InputManager::SetSearchCallback(std::function<void(const std::string&)> callback) {
+    search_callback_ = callback;
+}
+
+void InputManager::SetSearchTerm(std::string* search_term) {
+    search_term_ = search_term;
+}
+
 void InputManager::SetDebugMessage(const std::string& message) {
     debug_message_ = message;
 }
@@ -52,15 +60,17 @@ Component InputManager::CreateComponent() {
             }
         }
 
-        // Enter focuses correct input or loads file
+        // Enter focuses correct input or triggers actions
         if (event == Event::Return) {
             escape_pressed_ = false;
             int selected = switcher_.GetSelectedWindow();
             if (selected < input_windows_.size()) {
                 input_windows_[selected]->TakeFocus();
-                // If FILE window (id 0) and we have a callback, load file
+                // Trigger callbacks based on window
                 if (selected == 0 && file_load_callback_) {
                     file_load_callback_();
+                } else if (selected == 1 && search_callback_ && search_term_) {
+                    search_callback_(*search_term_);
                 }
             }
             return true;
