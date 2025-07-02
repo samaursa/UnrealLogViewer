@@ -15,6 +15,20 @@ void InputManager::AddExpandedWindow(int id, const std::string& title) {
     expanded_window_ = std::make_unique<ExpandedWindow>(id, title);
 }
 
+void InputManager::SetFileLoadCallback(std::function<void()> callback) {
+    file_load_callback_ = callback;
+}
+
+void InputManager::SetLogEntries(const std::vector<LogEntry>* entries) {
+    if (log_window_) {
+        log_window_->SetLogEntries(entries);
+    }
+}
+
+void InputManager::SetDebugMessage(const std::string& message) {
+    debug_message_ = message;
+}
+
 Component InputManager::CreateComponent() {
     Components components;
     for (auto& window : input_windows_) {
@@ -38,12 +52,16 @@ Component InputManager::CreateComponent() {
             }
         }
 
-        // Enter focuses correct input
+        // Enter focuses correct input or loads file
         if (event == Event::Return) {
             escape_pressed_ = false;
             int selected = switcher_.GetSelectedWindow();
             if (selected < input_windows_.size()) {
                 input_windows_[selected]->TakeFocus();
+                // If FILE window (id 0) and we have a callback, load file
+                if (selected == 0 && file_load_callback_) {
+                    file_load_callback_();
+                }
             }
             return true;
         }
@@ -74,8 +92,12 @@ Element InputManager::Render() const {
     }
 
     // Status bar at bottom
-    auto status = text("Window: " + std::to_string(selected) +
-                      " | Focus: " + std::string(escape_pressed_ ? "OFF" : "ON"));
+    auto status_text = "Window: " + std::to_string(selected) +
+                      " | Focus: " + std::string(escape_pressed_ ? "OFF" : "ON");
+    if (!debug_message_.empty()) {
+        status_text += " | " + debug_message_;
+    }
+    auto status = text(status_text);
 
     // Log window fills middle, expanded at bottom
     if (log_window_ && expanded_window_) {

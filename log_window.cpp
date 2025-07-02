@@ -4,11 +4,17 @@
 using namespace ftxui;
 
 LogWindow::LogWindow(int id, const std::string& title)
-    : id_(id), title_(title), selected_line_(0), scroll_offset_(0) {}
+    : id_(id), title_(title), selected_line_(0), scroll_offset_(0), log_entries_(nullptr) {}
+
+void LogWindow::SetLogEntries(const std::vector<LogEntry>* entries) {
+    log_entries_ = entries;
+    selected_line_ = 0;
+    scroll_offset_ = 0;
+}
 
 bool LogWindow::HandleEvent(Event event) {
-    // Mock log count for testing
-    const int total_logs = 130;
+    int total_logs = log_entries_ ? log_entries_->size() : 0;
+    if (total_logs == 0) return false;
 
     if (event == Event::ArrowUp && selected_line_ > 0) {
         selected_line_--;
@@ -20,7 +26,7 @@ bool LogWindow::HandleEvent(Event event) {
 
     if (event == Event::ArrowDown && selected_line_ < total_logs - 1) {
         selected_line_++;
-        const int visible_lines = 20; // Will be updated by available height
+        const int visible_lines = 20;
         if (selected_line_ >= scroll_offset_ + visible_lines) {
             scroll_offset_ = selected_line_ - visible_lines + 1;
         }
@@ -47,6 +53,13 @@ bool LogWindow::HandleEvent(Event event) {
     return false;
 }
 
+const LogEntry* LogWindow::GetSelectedEntry() const {
+    if (!log_entries_ || selected_line_ >= log_entries_->size()) {
+        return nullptr;
+    }
+    return &(*log_entries_)[selected_line_];
+}
+
 Element LogWindow::Render(bool is_selected, int available_height) const {
     std::string display_title = title_;
     if (!is_selected) {
@@ -58,22 +71,29 @@ Element LogWindow::Render(bool is_selected, int available_height) const {
     Elements log_lines;
     log_lines.push_back(text("Time | Category | Level | Message") | bold);
 
-    // Use available height minus header and footer
     int visible_lines = std::max(5, available_height - 3);
 
-    // Mock log entries for testing
-    for (int i = 0; i < visible_lines; ++i) {
-        int line_num = scroll_offset_ + i;
-        std::string line = "Log entry " + std::to_string(line_num);
+    if (!log_entries_ || log_entries_->empty()) {
+        log_lines.push_back(text("No log entries loaded"));
+    } else {
+        for (int i = 0; i < visible_lines; ++i) {
+            int line_idx = scroll_offset_ + i;
+            if (line_idx >= log_entries_->size()) break;
 
-        auto element = text(line);
-        if (line_num == selected_line_) {
-            element = element | inverted;
+            const auto& entry = (*log_entries_)[line_idx];
+            std::string line = entry.timestamp + " | " + entry.category + " | " + entry.level + " | " + entry.message;
+            if (line.length() > 120) line = line.substr(0, 117) + "...";
+
+            auto element = text(line);
+            if (line_idx == selected_line_) {
+                element = element | inverted;
+            }
+            log_lines.push_back(element);
         }
-        log_lines.push_back(element);
     }
 
-    log_lines.push_back(text("Selected: " + std::to_string(selected_line_) +
+    int total = log_entries_ ? log_entries_->size() : 0;
+    log_lines.push_back(text("Selected: " + std::to_string(selected_line_) + "/" + std::to_string(total) +
                              " | Scroll: " + std::to_string(scroll_offset_)));
 
     return window(text(title_text), vbox(log_lines));

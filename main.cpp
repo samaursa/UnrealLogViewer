@@ -5,11 +5,24 @@
 using namespace ftxui;
 
 Component LogViewer::CreateUI() {
+    // Set default file path for debugging
+    if (file_path_.empty()) {
+        file_path_ = "test.log";
+    }
+
     auto manager = std::make_shared<InputManager>();
     manager->AddInputWindow(0, "FILE", &file_path_, "Enter file path...");
     manager->AddInputWindow(1, "SEARCH", &search_term_, "Search logs...");
     manager->AddLogWindow(2, "LOG");
     manager->AddExpandedWindow(3, "EXPANDED");
+
+    // Set file load callback
+    manager->SetFileLoadCallback([this, manager]() {
+        manager->SetDebugMessage("Loading file: " + file_path_);
+        LoadFile();
+        manager->SetDebugMessage("Loaded " + std::to_string(log_entries_.size()) + " entries");
+        manager->SetLogEntries(&log_entries_);
+    });
 
     auto component = manager->CreateComponent();
 
