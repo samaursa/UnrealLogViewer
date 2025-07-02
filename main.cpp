@@ -15,9 +15,11 @@ Component LogViewer::CreateUI() {
     manager->AddInputWindow(1, "SEARCH", &search_term_, "Search logs...");
     manager->AddLogWindow(2, "LOG");
     manager->AddExpandedWindow(3, "EXPANDED");
+    manager->AddCategoriesWindow(4, "CATEGORIES");
 
     // Set search term reference
     manager->SetSearchTerm(&search_term_);
+    manager->SetFilterManager(&filter_manager_);
 
     // Set file load callback
     manager->SetFileLoadCallback([this, manager]() {

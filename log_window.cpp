@@ -203,17 +203,43 @@ Element LogWindow::Render(bool is_selected, int available_height) const {
 
     // Add custom scrollbar if needed
     if (total > visible_lines) {
-        // Calculate scrollbar position
-        float scroll_ratio = (float)scroll_offset_ / (total - visible_lines);
-        int scrollbar_height = visible_lines;
-        int thumb_pos = (int)(scroll_ratio * (scrollbar_height - 1));
-
         Elements scrollbar_elements;
-        for (int i = 0; i < scrollbar_height; ++i) {
-            if (i == thumb_pos) {
-                scrollbar_elements.push_back(text("█"));
+
+        // Map entire log to scrollbar height
+        for (int i = 0; i < visible_lines; ++i) {
+            // Calculate which log entry this scrollbar position represents
+            int log_idx = (int)((float)i / visible_lines * total);
+
+            if (log_idx < total) {
+                // Get actual entry for color
+                size_t entry_idx = filtered_indices_ ?
+                    (*filtered_indices_)[log_idx] : log_idx;
+                const auto& entry = (*log_entries_)[entry_idx];
+
+                Color minimap_color = Color::GrayDark;
+                if (entry.category.empty()) {
+                    minimap_color = Color::GrayDark;
+                } else if (entry.level.find("Error") != std::string::npos) {
+                    minimap_color = Color::Red;
+                } else if (entry.level.find("Warning") != std::string::npos) {
+                    minimap_color = Color::Yellow;
+                } else if (entry.level.find("Display") != std::string::npos) {
+                    minimap_color = Color::White;
+                } else if (entry.category.find("LogCore") != std::string::npos) {
+                    minimap_color = Color::Green;
+                } else if (entry.category.find("LogRendering") != std::string::npos) {
+                    minimap_color = Color::Blue;
+                } else if (entry.category.find("LogBlueprint") != std::string::npos) {
+                    minimap_color = Color::Magenta;
+                }
+
+                // Show current view position
+                bool in_current_view = (log_idx >= scroll_offset_ && log_idx < scroll_offset_ + visible_lines);
+                auto char_element = text(in_current_view ? "█" : "▌") | color(minimap_color);
+
+                scrollbar_elements.push_back(char_element);
             } else {
-                scrollbar_elements.push_back(text("│"));
+                scrollbar_elements.push_back(text("│") | color(Color::GrayDark));
             }
         }
 

@@ -15,6 +15,16 @@ void InputManager::AddExpandedWindow(int id, const std::string& title) {
     expanded_window_ = std::make_unique<ExpandedWindow>(id, title);
 }
 
+void InputManager::AddCategoriesWindow(int id, const std::string& title) {
+    categories_window_ = std::make_unique<CategoriesWindow>(id, title);
+}
+
+void InputManager::SetFilterManager(FilterManager* manager) {
+    if (categories_window_) {
+        categories_window_->SetFilterManager(manager);
+    }
+}
+
 void InputManager::SetFileLoadCallback(std::function<void()> callback) {
     file_load_callback_ = callback;
 }
@@ -46,6 +56,11 @@ Component InputManager::CreateComponent() {
     auto container = Container::Vertical(components);
 
     container |= CatchEvent([this](Event event) {
+        // Categories window always handles number keys for toggles
+        if (categories_window_ && categories_window_->HandleEvent(event)) {
+            return true;
+        }
+
         // Log window always handles arrow keys and page up/down
         if (log_window_ && log_window_->HandleEvent(event)) {
             return true;
@@ -54,7 +69,8 @@ Component InputManager::CreateComponent() {
         // Window switching
         if (event.is_character()) {
             char c = event.character()[0];
-            int total_windows = input_windows_.size() + (log_window_ ? 1 : 0) + (expanded_window_ ? 1 : 0);
+            int total_windows = input_windows_.size() + (log_window_ ? 1 : 0) +
+                               (expanded_window_ ? 1 : 0) + (categories_window_ ? 1 : 0);
             if (switcher_.HandleWindowSwitch(c, total_windows)) {
                 return true;
             }
@@ -120,18 +136,35 @@ Element InputManager::Render() const {
     if (log_window_ && expanded_window_) {
         int log_id = input_windows_.size();
         int expanded_id = log_id + 1;
-        int selected_log_line = log_window_->GetSelectedLine();
+        int categories_id = expanded_id + 1;
 
         // Calculate available height for log window
         auto screen_size = ftxui::Terminal::Size();
         int available_height = screen_size.dimy - 6 - 8 - 3; // inputs(6) + expanded(8) + borders/status(3)
 
-        return vbox({
-            vbox(top_elements) | size(HEIGHT, EQUAL, 6),
-            log_window_->Render(selected == log_id, available_height) | flex,
-            expanded_window_->Render(selected == expanded_id, log_window_->GetSelectedEntry()) | size(HEIGHT, EQUAL, 8),
-            status
-        }) | border;
+        Elements main_content;
+        main_content.push_back(vbox(top_elements) | size(HEIGHT, EQUAL, 6));
+        main_content.push_back(log_window_->Render(selected == log_id, available_height) | flex);
+        main_content.push_back(expanded_window_->Render(selected == expanded_id, log_window_->GetSelectedEntry()) | size(HEIGHT, EQUAL, 8));
+
+        auto left_side = vbox(main_content) | flex;
+
+        if (categories_window_) {
+            auto right_side = categories_window_->Render(selected == categories_id) | size(WIDTH, EQUAL, screen_size.dimx * 3 / 10);
+
+            return vbox({
+                hbox({
+                    left_side,
+                    right_side
+                }) | flex,
+                status
+            }) | border;
+        } else {
+            return vbox({
+                left_side | flex,
+                status
+            }) | border;
+        }
     }
 
     // Fallback for missing windows

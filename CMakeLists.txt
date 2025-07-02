@@ -29,6 +29,7 @@ add_executable(unreal_log_viewer
   input_manager.cpp
   log_window.cpp
   expanded_window.cpp
+  categories_window.cpp
 
   # Header files for IDE support
   log_entry.h
@@ -40,6 +41,7 @@ add_executable(unreal_log_viewer
   input_manager.h
   log_window.h
   expanded_window.h
+  categories_window.h
 )
 
 # Link FTXUI libraries
