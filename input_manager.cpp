@@ -56,13 +56,14 @@ Component InputManager::CreateComponent() {
     auto container = Container::Vertical(components);
 
     container |= CatchEvent([this](Event event) {
-        // Categories window always handles number keys for toggles
-        if (categories_window_ && categories_window_->HandleEvent(event)) {
+        // Categories window handles events when focused
+        int categories_id = input_windows_.size() + (log_window_ ? 1 : 0) + (expanded_window_ ? 1 : 0);
+        if (switcher_.GetSelectedWindow() == categories_id && categories_window_ && categories_window_->HandleEvent(event)) {
             return true;
         }
 
-        // Log window always handles arrow keys and page up/down
-        if (log_window_ && log_window_->HandleEvent(event)) {
+        // Log window always handles arrow keys and page up/down (except when categories focused)
+        if (switcher_.GetSelectedWindow() != categories_id && log_window_ && log_window_->HandleEvent(event)) {
             return true;
         }
 
@@ -150,7 +151,7 @@ Element InputManager::Render() const {
         auto left_side = vbox(main_content) | flex;
 
         if (categories_window_) {
-            auto right_side = categories_window_->Render(selected == categories_id) | size(WIDTH, EQUAL, screen_size.dimx * 3 / 10);
+            auto right_side = categories_window_->Render(selected == categories_id, available_height) | size(WIDTH, EQUAL, screen_size.dimx * 3 / 10);
 
             return vbox({
                 hbox({
