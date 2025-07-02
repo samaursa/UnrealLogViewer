@@ -144,6 +144,28 @@ Element LogWindow::Render(bool is_selected, int available_height) const {
 
             const auto& entry = (*log_entries_)[entry_idx];
 
+            // Determine row color based on level and category
+            Color row_color = Color::Default;
+            if (entry.category.empty()) {
+                row_color = Color::GrayDark; // No category = muted gray
+            } else if (entry.level.find("Error") != std::string::npos) {
+                row_color = Color::Red;
+            } else if (entry.level.find("Warning") != std::string::npos) {
+                row_color = Color::Yellow;
+            } else if (entry.level.find("Verbose") != std::string::npos) {
+                row_color = Color::GrayLight;
+            } else if (entry.level.find("Display") != std::string::npos) {
+                row_color = Color::White;
+            } else if (entry.category.find("LogCore") != std::string::npos ||
+                      entry.category.find("LogEngine") != std::string::npos) {
+                row_color = Color::Green;
+            } else if (entry.category.find("LogRendering") != std::string::npos ||
+                      entry.category.find("LogRHI") != std::string::npos) {
+                row_color = Color::Blue;
+            } else if (entry.category.find("LogBlueprint") != std::string::npos) {
+                row_color = Color::Magenta;
+            }
+
             // Truncate fields to fit columns
             std::string time_str = entry.timestamp.length() > 12 ?
                 entry.timestamp.substr(0, 12) : entry.timestamp;
@@ -164,7 +186,7 @@ Element LogWindow::Render(bool is_selected, int available_height) const {
                 text(level_str) | size(WIDTH, EQUAL, 10),
                 text("│"),
                 text(entry.message) | flex,
-            });
+            }) | color(row_color);
 
             if (display_idx == selected_line_) {
                 row = row | inverted;
