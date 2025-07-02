@@ -13,7 +13,7 @@ public:
     LogWindow(int id, const std::string& title);
 
     bool HandleEvent(ftxui::Event event);
-    ftxui::Element Render(bool is_selected) const;
+    ftxui::Element Render(bool is_selected, int available_height = 15) const;
 
     int GetSelectedLine() const { return selected_line_; }
     int GetScrollOffset() const { return scroll_offset_; }

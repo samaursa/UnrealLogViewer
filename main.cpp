@@ -19,7 +19,7 @@ Component LogViewer::CreateUI() {
 }
 
 void LogViewer::Run() {
-    auto screen = ScreenInteractive::TerminalOutput();
+    auto screen = ScreenInteractive::Fullscreen();
     screen.Loop(CreateUI());
 }
 

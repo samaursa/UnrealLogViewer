@@ -1,4 +1,5 @@
 #include "input_manager.h"
+#include "ftxui/screen/terminal.hpp"
 
 using namespace ftxui;
 
@@ -66,23 +67,41 @@ Element InputManager::Render() const {
     Elements elements;
     int selected = switcher_.GetSelectedWindow();
 
+    // Input windows at top
+    Elements top_elements;
     for (int i = 0; i < input_windows_.size(); ++i) {
-        elements.push_back(input_windows_[i]->Render(i == selected, escape_pressed_));
+        top_elements.push_back(input_windows_[i]->Render(i == selected, escape_pressed_));
     }
 
+    // Status bar at bottom
+    auto status = text("Window: " + std::to_string(selected) +
+                      " | Focus: " + std::string(escape_pressed_ ? "OFF" : "ON"));
+
+    // Log window fills middle, expanded at bottom
+    if (log_window_ && expanded_window_) {
+        int log_id = input_windows_.size();
+        int expanded_id = log_id + 1;
+        int selected_log_line = log_window_->GetSelectedLine();
+
+        // Calculate available height for log window
+        auto screen_size = ftxui::Terminal::Size();
+        int available_height = screen_size.dimy - 6 - 8 - 3; // inputs(6) + expanded(8) + borders/status(3)
+
+        return vbox({
+            vbox(top_elements) | size(HEIGHT, EQUAL, 6),
+            log_window_->Render(selected == log_id, available_height) | flex,
+            expanded_window_->Render(selected == expanded_id, selected_log_line) | size(HEIGHT, EQUAL, 8),
+            status
+        }) | border;
+    }
+
+    // Fallback for missing windows
+    elements.insert(elements.end(), top_elements.begin(), top_elements.end());
     if (log_window_) {
         int log_id = input_windows_.size();
         elements.push_back(log_window_->Render(selected == log_id));
     }
-
-    if (expanded_window_) {
-        int expanded_id = input_windows_.size() + (log_window_ ? 1 : 0);
-        int selected_log_line = log_window_ ? log_window_->GetSelectedLine() : 0;
-        elements.push_back(expanded_window_->Render(selected == expanded_id, selected_log_line));
-    }
-
-    elements.push_back(text("Window: " + std::to_string(selected) +
-                           " | Focus: " + std::string(escape_pressed_ ? "OFF" : "ON")));
+    elements.push_back(status);
 
     return vbox(elements) | border;
 }
