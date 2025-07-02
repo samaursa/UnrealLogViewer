@@ -22,4 +22,5 @@ public:
     int GetSelectedLine() const { return selected_line_; }
     int GetScrollOffset() const { return scroll_offset_; }
     const LogEntry* GetSelectedEntry() const;
+    const std::vector<LogEntry>* GetLogEntries() const { return log_entries_; }
 };

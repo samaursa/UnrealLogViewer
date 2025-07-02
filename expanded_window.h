@@ -1,5 +1,6 @@
 #pragma once
 #include "ftxui/dom/elements.hpp"
+#include "log_entry.h"
 
 class ExpandedWindow {
 private:
@@ -8,5 +9,5 @@ private:
 
 public:
     ExpandedWindow(int id, const std::string& title);
-    ftxui::Element Render(bool is_selected, int selected_log_line) const;
+    ftxui::Element Render(bool is_selected, const LogEntry* selected_entry) const;
 };

@@ -25,6 +25,7 @@ public:
     void SetFileLoadCallback(std::function<void()> callback);
     void SetLogEntries(const std::vector<LogEntry>* entries);
     void SetDebugMessage(const std::string& message);
+    LogWindow* GetLogWindow() const { return log_window_.get(); }
     ftxui::Component CreateComponent();
     ftxui::Element Render() const;
 

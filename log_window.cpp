@@ -93,8 +93,7 @@ Element LogWindow::Render(bool is_selected, int available_height) const {
     }
 
     int total = log_entries_ ? log_entries_->size() : 0;
-    log_lines.push_back(text("Selected: " + std::to_string(selected_line_) + "/" + std::to_string(total) +
-                             " | Scroll: " + std::to_string(scroll_offset_)));
+    // Removed status line - will be shown in main status bar
 
     return window(text(title_text), vbox(log_lines));
 }

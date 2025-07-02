@@ -94,6 +94,13 @@ Element InputManager::Render() const {
     // Status bar at bottom
     auto status_text = "Window: " + std::to_string(selected) +
                       " | Focus: " + std::string(escape_pressed_ ? "OFF" : "ON");
+
+    // Add log navigation info
+    if (log_window_) {
+        int total = log_window_->GetLogEntries() ? log_window_->GetLogEntries()->size() : 0;
+        status_text += " | Line: " + std::to_string(log_window_->GetSelectedLine()) + "/" + std::to_string(total);
+    }
+
     if (!debug_message_.empty()) {
         status_text += " | " + debug_message_;
     }
@@ -112,7 +119,7 @@ Element InputManager::Render() const {
         return vbox({
             vbox(top_elements) | size(HEIGHT, EQUAL, 6),
             log_window_->Render(selected == log_id, available_height) | flex,
-            expanded_window_->Render(selected == expanded_id, selected_log_line) | size(HEIGHT, EQUAL, 8),
+            expanded_window_->Render(selected == expanded_id, log_window_->GetSelectedEntry()) | size(HEIGHT, EQUAL, 8),
             status
         }) | border;
     }
@@ -122,6 +129,11 @@ Element InputManager::Render() const {
     if (log_window_) {
         int log_id = input_windows_.size();
         elements.push_back(log_window_->Render(selected == log_id));
+    }
+    if (expanded_window_) {
+        int expanded_id = input_windows_.size() + (log_window_ ? 1 : 0);
+        const LogEntry* selected_entry = log_window_ ? log_window_->GetSelectedEntry() : nullptr;
+        elements.push_back(expanded_window_->Render(selected == expanded_id, selected_entry));
     }
     elements.push_back(status);
 

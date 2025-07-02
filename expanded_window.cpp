@@ -6,7 +6,7 @@ using namespace ftxui;
 ExpandedWindow::ExpandedWindow(int id, const std::string& title)
     : id_(id), title_(title) {}
 
-Element ExpandedWindow::Render(bool is_selected, int selected_log_line) const {
+Element ExpandedWindow::Render(bool is_selected, const LogEntry* selected_entry) const {
     std::string display_title = title_;
     if (!is_selected) {
         std::transform(display_title.begin(), display_title.end(), display_title.begin(), ::tolower);
@@ -14,13 +14,18 @@ Element ExpandedWindow::Render(bool is_selected, int selected_log_line) const {
 
     auto title_text = "[" + std::to_string(id_) + "] " + display_title;
 
+    if (!selected_entry) {
+        return window(text(title_text), vbox({
+            text("No log entry selected")
+        }));
+    }
+
     return window(text(title_text), vbox({
         text("Selected log line details:") | bold,
-        text("Line: " + std::to_string(selected_log_line)),
-        text("Raw: Mock log entry " + std::to_string(selected_log_line)),
-        text("Category: LogTemp"),
-        text("Level: Display"),
-        text("Time: 12:34:56"),
-        text("Message: This is a mock message for line " + std::to_string(selected_log_line))
+        text("Raw: " + selected_entry->raw_line),
+        text("Time: " + selected_entry->timestamp),
+        text("Category: " + selected_entry->category),
+        text("Level: " + selected_entry->level),
+        text("Message: " + selected_entry->message)
     }));
 }
