@@ -5,42 +5,74 @@
 using namespace ftxui;
 
 Component LogViewer::CreateUI() {
-    // Set default file path for debugging
     if (file_path_.empty()) {
         file_path_ = "test.log";
     }
 
     auto manager = std::make_shared<InputManager>();
     manager->AddInputWindow(0, "FILE", &file_path_, "Enter file path...");
-    manager->AddInputWindow(1, "SEARCH", &search_term_, "Search logs...");
     manager->AddLogWindow(2, "LOG");
     manager->AddExpandedWindow(3, "EXPANDED");
-    manager->AddCategoriesWindow(4, "CATEGORIES");
+    manager->SetupHierarchicalSearch();
 
-    // Set search term reference
-    manager->SetSearchTerm(&search_term_);
     manager->SetFilterManager(&filter_manager_);
 
-    // Set file load callback
     manager->SetFileLoadCallback([this, manager]() {
         manager->SetDebugMessage("Loading file: " + file_path_);
         LoadFile();
         manager->SetDebugMessage("Loaded " + std::to_string(log_entries_.size()) + " entries");
         manager->SetLogEntries(&log_entries_);
+
+        // Initialize first search level with all entries
+        if (auto* search_mgr = manager->GetSearchManager()) {
+            std::vector<size_t> all_indices;
+            for (size_t i = 0; i < log_entries_.size(); ++i) {
+                all_indices.push_back(i);
+            }
+            search_mgr->UpdateFilteredIndices(0, all_indices);
+        }
+
         UpdateFilteredEntries();
         if (auto* log_window = manager->GetLogWindow()) {
             log_window->SetFilteredEntries(&filtered_indices_);
         }
     });
 
-    // Set search callback
-    manager->SetSearchCallback([this, manager](const std::string& term) {
-        search_term_ = term;
-        UpdateFilteredEntries();
-        if (auto* log_window = manager->GetLogWindow()) {
-            log_window->SetFilteredEntries(&filtered_indices_);
+    manager->SetSearchUpdateCallback([this, manager]() {
+        if (auto* search_mgr = manager->GetSearchManager()) {
+            const auto& levels = search_mgr->GetSearchLevels();
+
+            // Start with all entries for level 0
+            std::vector<size_t> current_indices;
+            for (size_t i = 0; i < log_entries_.size(); ++i) {
+                current_indices.push_back(i);
+            }
+
+            // Apply each search level sequentially
+            for (size_t level = 0; level < levels.size(); ++level) {
+                const std::string& term = levels[level].term;
+                if (!term.empty()) {
+                    std::vector<size_t> filtered;
+                    for (size_t idx : current_indices) {
+                        if (filter_manager_.MatchesFilters(log_entries_[idx], term)) {
+                            filtered.push_back(idx);
+                        }
+                    }
+                    current_indices = filtered;
+                }
+
+                // Update this level's filtered indices
+                search_mgr->UpdateFilteredIndices(level, current_indices);
+            }
+
+            // Update the main filtered indices with the final result
+            filtered_indices_ = current_indices;
+            if (auto* log_window = manager->GetLogWindow()) {
+                log_window->SetFilteredEntries(&filtered_indices_);
+            }
+
+            manager->SetDebugMessage("Hierarchical search: " + std::to_string(filtered_indices_.size()) + " matches");
         }
-        manager->SetDebugMessage("Search: " + std::to_string(filtered_indices_.size()) + " matches");
     });
 
     auto component = manager->CreateComponent();

@@ -1,4 +1,5 @@
 #include "input_manager.h"
+#include "hierarchical_search_manager.h"
 #include "ftxui/screen/terminal.hpp"
 
 using namespace ftxui;
@@ -15,14 +16,35 @@ void InputManager::AddExpandedWindow(int id, const std::string& title) {
     expanded_window_ = std::make_unique<ExpandedWindow>(id, title);
 }
 
-void InputManager::AddCategoriesWindow(int id, const std::string& title) {
-    categories_window_ = std::make_unique<CategoriesWindow>(id, title);
+void InputManager::SetupHierarchicalSearch() {
+    search_manager_ = std::make_unique<HierarchicalSearchManager>();
+    search_manager_->SetUpdateCallback([this]() {
+        if (search_update_callback_) {
+            search_update_callback_();
+        }
+    });
+
+    // Create input components for each search level
+    UpdateSearchInputs();
+}
+
+void InputManager::UpdateSearchInputs() {
+    search_inputs_.clear();
+
+    for (size_t i = 0; i < search_manager_->GetLevelCount(); ++i) {
+        auto& level = search_manager_->GetSearchLevels()[i];
+        auto input = Input(&const_cast<std::string&>(level.term), "Search level " + std::to_string(i + 1));
+        search_inputs_.push_back(input);
+    }
+
+    // Focus the current level
+    if (search_manager_->GetFocusedLevel() < search_inputs_.size()) {
+        search_inputs_[search_manager_->GetFocusedLevel()]->TakeFocus();
+    }
 }
 
 void InputManager::SetFilterManager(FilterManager* manager) {
-    if (categories_window_) {
-        categories_window_->SetFilterManager(manager);
-    }
+    filter_manager_ = manager;
 }
 
 void InputManager::SetFileLoadCallback(std::function<void()> callback) {
@@ -39,7 +61,12 @@ void InputManager::SetSearchCallback(std::function<void(const std::string&)> cal
     search_callback_ = callback;
 }
 
+void InputManager::SetSearchUpdateCallback(std::function<void()> callback) {
+    search_update_callback_ = callback;
+}
+
 void InputManager::SetSearchTerm(std::string* search_term) {
+    // Legacy support - not used with hierarchical search
     search_term_ = search_term;
 }
 
@@ -49,47 +76,87 @@ void InputManager::SetDebugMessage(const std::string& message) {
 
 Component InputManager::CreateComponent() {
     Components components;
+
+    // File input
     for (auto& window : input_windows_) {
         components.push_back(window->GetComponent());
     }
 
+    // Search inputs container
+    auto search_container = Container::Vertical({});
+    for (auto& input : search_inputs_) {
+        search_container->Add(input);
+    }
+    components.push_back(search_container);
+
     auto container = Container::Vertical(components);
 
-    container |= CatchEvent([this](Event event) {
-        // Categories window handles events when focused
-        int categories_id = input_windows_.size() + (log_window_ ? 1 : 0) + (expanded_window_ ? 1 : 0);
-        if (switcher_.GetSelectedWindow() == categories_id && categories_window_ && categories_window_->HandleEvent(event)) {
-            return true;
+    // Make container focusable and handle focus manually
+    container = container | CatchEvent([this](Event event) {
+        // Handle hierarchical search controls first
+        if (event == Event::Character('\t')) { // Tab key
+            if (search_manager_) {
+                search_manager_->FocusNext();
+                UpdateSearchInputs();
+                return true;
+            }
         }
 
-        // Log window always handles arrow keys and page up/down (except when categories focused)
-        if (switcher_.GetSelectedWindow() != categories_id && log_window_ && log_window_->HandleEvent(event)) {
-            return true;
+        // F1 to add search level
+        if (event == Event::F1) {
+            if (search_manager_) {
+                search_manager_->AddSearchLevel();
+                UpdateSearchInputs();
+                return true;
+            }
+        }
+
+        // F2 to remove search level
+        if (event == Event::F2) {
+            if (search_manager_) {
+                search_manager_->RemoveSearchLevel();
+                UpdateSearchInputs();
+                return true;
+            }
         }
 
         // Window switching
         if (event.is_character()) {
             char c = event.character()[0];
-            int total_windows = input_windows_.size() + (log_window_ ? 1 : 0) +
-                               (expanded_window_ ? 1 : 0) + (categories_window_ ? 1 : 0);
+            int total_windows = input_windows_.size() + 1 + (log_window_ ? 1 : 0) + (expanded_window_ ? 1 : 0);
             if (switcher_.HandleWindowSwitch(c, total_windows)) {
+                // Don't take focus automatically - let Enter do it
                 return true;
             }
         }
 
-        // Enter focuses correct input or triggers actions
+        // Enter focuses the selected window
         if (event == Event::Return) {
             escape_pressed_ = false;
             int selected = switcher_.GetSelectedWindow();
-            if (selected < input_windows_.size()) {
-                input_windows_[selected]->TakeFocus();
-                // Trigger callbacks based on window
-                if (selected == 0 && file_load_callback_) {
-                    file_load_callback_();
-                } else if (selected == 1 && search_callback_ && search_term_) {
-                    search_callback_(*search_term_);
+            if (selected == 0) {
+                // Focus file input and trigger callback
+                if (!input_windows_.empty()) {
+                    input_windows_[0]->TakeFocus();
                 }
+                if (file_load_callback_) {
+                    file_load_callback_();
+                }
+                return true;
+            } else if (selected == 1) {
+                // Focus current search level and trigger search
+                if (search_manager_ && search_manager_->GetFocusedLevel() < search_inputs_.size()) {
+                    search_inputs_[search_manager_->GetFocusedLevel()]->TakeFocus();
+                }
+                if (search_update_callback_) {
+                    search_update_callback_();
+                }
+                return true;
             }
+        }
+
+        // Log window handles navigation events
+        if (log_window_ && log_window_->HandleEvent(event)) {
             return true;
         }
 
@@ -112,20 +179,54 @@ Element InputManager::Render() const {
     Elements elements;
     int selected = switcher_.GetSelectedWindow();
 
-    // Input windows at top
-    Elements top_elements;
-    for (int i = 0; i < input_windows_.size(); ++i) {
-        top_elements.push_back(input_windows_[i]->Render(i == selected, escape_pressed_));
+    // File input at top
+    if (!input_windows_.empty()) {
+        elements.push_back(input_windows_[0]->Render(selected == 0, escape_pressed_));
     }
 
-    // Status bar at bottom
+    // Hierarchical search inputs
+    if (search_manager_) {
+        Elements search_elements;
+        search_elements.push_back(text("Hierarchical Search (Tab: switch, F1: add, F2: remove):") | bold | color(Color::Yellow));
+
+        for (size_t i = 0; i < search_manager_->GetLevelCount(); ++i) {
+            const auto& level = search_manager_->GetSearchLevels()[i];
+            bool is_focused = (selected == 1 && i == search_manager_->GetFocusedLevel());
+
+            std::string level_title = "Level " + std::to_string(i + 1);
+            if (is_focused) {
+                level_title = ">>> " + level_title + " <<<";
+            }
+
+            auto level_element = vbox({
+                text(level_title) | (is_focused ? color(Color::Green) : color(Color::GrayLight)),
+                hbox({
+                    text("Search: "),
+                    (i < search_inputs_.size() ? search_inputs_[i]->Render() : text(level.term)) | flex
+                })
+            });
+
+            if (is_focused) {
+                level_element = level_element | border;
+            }
+
+            search_elements.push_back(level_element);
+        }
+
+        elements.push_back(window(text("[1] HIERARCHICAL SEARCH"), vbox(search_elements)));
+    }
+
+    // Status bar
     auto status_text = "Window: " + std::to_string(selected) +
                       " | Focus: " + std::string(escape_pressed_ ? "OFF" : "ON");
 
-    // Add log navigation info
     if (log_window_) {
         int total = log_window_->GetLogEntries() ? log_window_->GetLogEntries()->size() : 0;
         status_text += " | Line: " + std::to_string(log_window_->GetSelectedLine()) + "/" + std::to_string(total);
+    }
+
+    if (search_manager_) {
+        status_text += " | Search Levels: " + std::to_string(search_manager_->GetLevelCount());
     }
 
     if (!debug_message_.empty()) {
@@ -133,49 +234,33 @@ Element InputManager::Render() const {
     }
     auto status = text(status_text);
 
-    // Log window fills middle, expanded at bottom
+    // Main layout
     if (log_window_ && expanded_window_) {
-        int log_id = input_windows_.size();
-        int expanded_id = log_id + 1;
-        int categories_id = expanded_id + 1;
+        int log_id = 2; // After file(0) and search(1)
+        int expanded_id = 3;
 
-        // Calculate available height for log window
         auto screen_size = ftxui::Terminal::Size();
-        int available_height = screen_size.dimy - 6 - 8 - 3; // inputs(6) + expanded(8) + borders/status(3)
+        int search_height = 3 + (search_manager_ ? search_manager_->GetLevelCount() * 3 : 0);
+        int available_height = screen_size.dimy - 4 - search_height - 8 - 3; // file(4) + search + expanded(8) + status(3)
 
         Elements main_content;
-        main_content.push_back(vbox(top_elements) | size(HEIGHT, EQUAL, 6));
+        main_content.insert(main_content.end(), elements.begin(), elements.end());
         main_content.push_back(log_window_->Render(selected == log_id, available_height) | flex);
         main_content.push_back(expanded_window_->Render(selected == expanded_id, log_window_->GetSelectedEntry()) | size(HEIGHT, EQUAL, 8));
 
-        auto left_side = vbox(main_content) | flex;
-
-        if (categories_window_) {
-            auto right_side = categories_window_->Render(selected == categories_id, available_height) | size(WIDTH, EQUAL, screen_size.dimx * 3 / 10);
-
-            return vbox({
-                hbox({
-                    left_side,
-                    right_side
-                }) | flex,
-                status
-            }) | border;
-        } else {
-            return vbox({
-                left_side | flex,
-                status
-            }) | border;
-        }
+        return vbox({
+            vbox(main_content) | flex,
+            status
+        }) | border;
     }
 
-    // Fallback for missing windows
-    elements.insert(elements.end(), top_elements.begin(), top_elements.end());
+    // Fallback
     if (log_window_) {
-        int log_id = input_windows_.size();
+        int log_id = 2;
         elements.push_back(log_window_->Render(selected == log_id));
     }
     if (expanded_window_) {
-        int expanded_id = input_windows_.size() + (log_window_ ? 1 : 0);
+        int expanded_id = 2 + (log_window_ ? 1 : 0);
         const LogEntry* selected_entry = log_window_ ? log_window_->GetSelectedEntry() : nullptr;
         elements.push_back(expanded_window_->Render(selected == expanded_id, selected_entry));
     }
