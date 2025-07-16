@@ -1,0 +1,229 @@
+﻿Build started 7/15/2025 1:04:20 AM.
+Logging verbosity is set to: Normal.     1>Project "D:\Repos\UnrealLogViewer\build\_deps\ftxui-build\component.vcxproj" on node 2 (Build target(s)).
+     1>PrepareForBuild:
+         Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
+       InitializeBuildStatus:
+         Creating "component.dir\Debug\component.tlog\unsuccessfulbuild" because "AlwaysCreate" was specified.
+         Touching "component.dir\Debug\component.tlog\unsuccessfulbuild".
+       CustomBuild:
+         Building Custom Rule D:/Repos/UnrealLogViewer/build/_deps/ftxui-src/CMakeLists.txt
+       ClCompile:
+         C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.38.33130\bin\HostX64\x64\CL.exe /c /I"D:\Repos\UnrealLogViewer\build\_deps\ftxui-src\src" /Zi /nologo /W1 /WX- /diagnostics:column /Od /Ob0 /D _UNICODE /D UNICODE /D WIN32 /D _WINDOWS /D _CRT_SECURE_NO_WARNINGS /D UNICODE /D _UNICODE /D FTXUI_MICROSOFT_TERMINAL_FALLBACK /D "CMAKE_INTDIR=\"Debug\"" /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Zc:inline /GR /std:c++17 /Fo"component.dir\Debug\\" /Fd"D:\Repos\UnrealLogViewer\build\_deps\ftxui-build\Debug\ftxui-component.pdb" /external:W0 /Gd /TP /wd4244 /wd4267 /errorReport:prompt  /external:I "D:/Repos/UnrealLogViewer/build/_deps/ftxui-src/include" /utf-8 "D:\Repos\UnrealLogViewer\build\_deps\ftxui-src\src\ftxui\component\animation.cpp" "D:\Repos\UnrealLogViewer\build\_deps\ftxui-src\src\ftxui\component\button.cpp" "D:\Repos\UnrealLogViewer\build\_deps\ftxui-src\src\ftxui\component\catch_event.cpp" "D:\Repos\UnrealLogViewer\build\_deps\ftxui-src\src\ftxui\component\checkbox.cpp" "D:\Repos\UnrealLogViewer\build\_deps\ftxui-src\src\ftxui\component\collapsible.cpp" "D:\Repos\UnrealLogViewer\build\_deps\ftxui-src\src\ftxui\component\component.cpp" "D:\Repos\UnrealLogViewer\build\_deps\ftxui-src\src\ftxui\component\component_options.cpp" "D:\Repos\UnrealLogViewer\build\_deps\ftxui-src\src\ftxui\component\container.cpp" "D:\Repos\UnrealLogViewer\build\_deps\ftxui-src\src\ftxui\component\dropdown.cpp" "D:\Repos\UnrealLogViewer\build\_deps\ftxui-src\src\ftxui\component\event.cpp" "D:\Repos\UnrealLogViewer\build\_deps\ftxui-src\src\ftxui\component\hoverable.cpp" "D:\Repos\UnrealLogViewer\build\_deps\ftxui-src\src\ftxui\component\input.cpp" "D:\Repos\UnrealLogViewer\build\_deps\ftxui-src\src\ftxui\component\loop.cpp" "D:\Repos\UnrealLogViewer\build\_deps\ftxui-src\src\ftxui\component\maybe.cpp" "D:\Repos\UnrealLogViewer\build\_deps\ftxui-src\src\ftxui\component\menu.cpp" "D:\Repos\UnrealLogViewer\build\_deps\ftxui-src\src\ftxui\component\modal.cpp" "D:\Repos\UnrealLogViewer\build\_deps\ftxui-src\src\ftxui\component\radiobox.cpp" "D:\Repos\UnrealLogViewer\build\_deps\ftxui-src\src\ftxui\component\renderer.cpp" "D:\Repos\UnrealLogViewer\build\_deps\ftxui-src\src\ftxui\component\resizable_split.cpp" "D:\Repos\UnrealLogViewer\build\_deps\ftxui-src\src\ftxui\component\screen_interactive.cpp" "D:\Repos\UnrealLogViewer\build\_deps\ftxui-src\src\ftxui\component\slider.cpp" "D:\Repos\UnrealLogViewer\build\_deps\ftxui-src\src\ftxui\component\terminal_input_parser.cpp" "D:\Repos\UnrealLogViewer\build\_deps\ftxui-src\src\ftxui\component\util.cpp" "D:\Repos\UnrealLogViewer\build\_deps\ftxui-src\src\ftxui\component\window.cpp"
+         animation.cpp
+         button.cpp
+         catch_event.cpp
+         checkbox.cpp
+         collapsible.cpp
+         component.cpp
+         component_options.cpp
+         container.cpp
+         dropdown.cpp
+         event.cpp
+         hoverable.cpp
+         input.cpp
+         loop.cpp
+         maybe.cpp
+         menu.cpp
+         modal.cpp
+         radiobox.cpp
+         renderer.cpp
+         resizable_split.cpp
+         screen_interactive.cpp
+         Generating Code...
+         Compiling...
+         slider.cpp
+         terminal_input_parser.cpp
+         util.cpp
+         window.cpp
+         Generating Code...
+       Lib:
+         C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.38.33130\bin\HostX64\x64\Lib.exe /OUT:"D:\Repos\UnrealLogViewer\build\_deps\ftxui-build\Debug\ftxui-component.lib" /NOLOGO /MACHINE:X64  /machine:x64 component.dir\Debug\animation.obj
+         component.dir\Debug\button.obj
+         component.dir\Debug\catch_event.obj
+         component.dir\Debug\checkbox.obj
+         component.dir\Debug\collapsible.obj
+         component.dir\Debug\component.obj
+         component.dir\Debug\component_options.obj
+         component.dir\Debug\container.obj
+         component.dir\Debug\dropdown.obj
+         component.dir\Debug\event.obj
+         component.dir\Debug\hoverable.obj
+         component.dir\Debug\input.obj
+         component.dir\Debug\loop.obj
+         component.dir\Debug\maybe.obj
+         component.dir\Debug\menu.obj
+         component.dir\Debug\modal.obj
+         component.dir\Debug\radiobox.obj
+         component.dir\Debug\renderer.obj
+         component.dir\Debug\resizable_split.obj
+         component.dir\Debug\screen_interactive.obj
+         component.dir\Debug\slider.obj
+         component.dir\Debug\terminal_input_parser.obj
+         component.dir\Debug\util.obj
+         component.dir\Debug\window.obj
+         component.vcxproj -> D:\Repos\UnrealLogViewer\build\_deps\ftxui-build\Debug\ftxui-component.lib
+       FinalizeBuildStatus:
+         Deleting file "component.dir\Debug\component.tlog\unsuccessfulbuild".
+         Touching "component.dir\Debug\component.tlog\component.lastbuildstate".
+     1>Done Building Project "D:\Repos\UnrealLogViewer\build\_deps\ftxui-build\component.vcxproj" (Build target(s)).
+
+Project Performance Summary:
+        0 ms  D:\Repos\UnrealLogViewer\build\ZERO_CHECK.vcxproj   4 calls
+                  0 ms  GetTargetPath                              1 calls
+                  0 ms  GetNativeManifest                          1 calls
+                  0 ms  GetProjectInfoForReference                 1 calls
+                  0 ms  GetCopyToOutputDirectoryItems              1 calls
+        0 ms  D:\Repos\UnrealLogViewer\build\_deps\ftxui-build\screen.vcxproj   4 calls
+                  0 ms  GetTargetPath                              1 calls
+                  0 ms  GetNativeManifest                          1 calls
+                  0 ms  GetProjectInfoForReference                 1 calls
+                  0 ms  GetCopyToOutputDirectoryItems              1 calls
+        2 ms  D:\Repos\UnrealLogViewer\build\_deps\ftxui-build\dom.vcxproj   4 calls
+                  0 ms  GetTargetPath                              1 calls
+                  1 ms  GetNativeManifest                          1 calls
+                  1 ms  GetProjectInfoForReference                 1 calls
+                  0 ms  GetCopyToOutputDirectoryItems              1 calls
+     9695 ms  D:\Repos\UnrealLogViewer\build\_deps\ftxui-build\component.vcxproj   1 calls
+               9695 ms  Build                                      1 calls
+
+Target Performance Summary:
+        0 ms  Build                                      1 calls
+        0 ms  _Lib                                       1 calls
+        0 ms  AfterLib                                   1 calls
+        0 ms  PrepareForRun                              1 calls
+        0 ms  DoLibOutputFilesMatch                      1 calls
+        0 ms  MakeDirsForLib                             1 calls
+        0 ms  ComputeReferenceLibInputs                  1 calls
+        0 ms  ResolvedLinkLib                            1 calls
+        0 ms  ComputeLibInputsFromProject                1 calls
+        0 ms  ComputeCLGeneratedLibInputs                1 calls
+        0 ms  ComputeCLOutputs                           1 calls
+        0 ms  ComputeRCGeneratedLibInputs                1 calls
+        0 ms  ComputeRCOutputs                           1 calls
+        0 ms  ComputeLibAdditionalOptions                1 calls
+        0 ms  BeforeLib                                  1 calls
+        0 ms  _ResourceCompile                           1 calls
+        0 ms  AfterResourceCompile                       1 calls
+        0 ms  MakeDirsForResourceCompile                 1 calls
+        0 ms  BeforeResourceCompile                      1 calls
+        0 ms  _ClCompile                                 1 calls
+        0 ms  AfterClCompile                             1 calls
+        0 ms  FinalizeBuildStatus                        1 calls
+        0 ms  MakeDirsForCl                              1 calls
+        0 ms  PostBuildEvent                             1 calls
+        0 ms  ComputeStdModulesCompileInputs             1 calls
+        0 ms  WarnCompileDuplicatedFilename              1 calls
+        0 ms  AfterBuildCompileEvent                     1 calls
+        0 ms  _GetCopyToOutputDirectoryItemsFromThisProject   1 calls
+        0 ms  _BuildCompileAction                        1 calls
+        0 ms  BuildLinkTraverse                          1 calls
+        0 ms  GetCopyToOutputDirectoryXamlAppDefs        1 calls
+        0 ms  _PopulateCommonStateForGetCopyToOutputDirectoryItems   1 calls
+        0 ms  _Deploy                                    1 calls
+        0 ms  _Appverifier                               1 calls
+        0 ms  CreateSatelliteAssemblies                  1 calls
+        0 ms  _GenerateSatelliteAssemblyInputs           1 calls
+        0 ms  _CheckForCompileOutputs                    1 calls
+        0 ms  ContentFilesProjectOutputGroup             1 calls
+        0 ms  MakeDirsForFxc                             1 calls
+        0 ms  SatelliteDllsProjectOutputGroup            1 calls
+        0 ms  PrepareResourceNames                       1 calls
+        0 ms  CreateCustomManifestResourceNames          1 calls
+        0 ms  AssignTargetPaths                          1 calls
+        0 ms  BuiltProjectOutputGroup                    1 calls
+        0 ms  _BscMake                                   1 calls
+        0 ms  MakeDirsForBscMake                         1 calls
+        0 ms  ComputeCLCompileGeneratedSbrFiles          1 calls
+        0 ms  _XdcMake                                   1 calls
+        0 ms  CopyFilesToOutputDirectory                 1 calls
+        0 ms  ComputeCLCompileGeneratedXDCFiles          1 calls
+        0 ms  ResolvedXDCMake                            1 calls
+        0 ms  RegisterOutput                             1 calls
+        0 ms  _Manifest                                  1 calls
+        0 ms  _ALink                                     1 calls
+        0 ms  ComputeLegacyManifestEmbedding             1 calls
+        0 ms  BuildCompile                               1 calls
+        0 ms  AddLibrariesToProjectsInfoForReference     1 calls
+        0 ms  _CopySourceItemsToOutputDirectory          1 calls
+        0 ms  AddDeployRecipeFileToProjectsInfoForReference   1 calls
+        0 ms  GetResolvedLinkLibs                        1 calls
+        0 ms  AfterResolveReferences                     1 calls
+        0 ms  ResolveAssemblyReferences                  1 calls
+        0 ms  _CleanGetCurrentAndPriorFileWrites         1 calls
+        0 ms  ResolveSDKReferences                       1 calls
+        0 ms  IncrementalClean                           1 calls
+        0 ms  SetCABuildNativeEnvironmentVariables       1 calls
+        0 ms  _CheckWindowsSDKInstalled                  1 calls
+        0 ms  GetResolvedWinMD                           1 calls
+        0 ms  SetBuildDefaultEnvironmentVariables        1 calls
+        0 ms  GetReferenceAssemblyPaths                  1 calls
+        0 ms  GetFrameworkPaths                          1 calls
+        0 ms  GetNativeManifest                          1 calls
+        0 ms  GetTargetPath                              1 calls
+        0 ms  GetTargetPathWithTargetPlatformMoniker     1 calls
+        0 ms  _RemoveNameMetadataFromProjectReferenceItems   1 calls
+        0 ms  PrepareProjectReferences                   1 calls
+        0 ms  _GetProjectReferenceTargetFrameworkProperties   1 calls
+        0 ms  _AddOutputPathToGlobalPropertiesToRemove   1 calls
+        0 ms  AssignProjectConfiguration                 1 calls
+        0 ms  IgnoreJavaScriptOutputAssembly             1 calls
+        0 ms  BeforeResolveReferences                    1 calls
+        0 ms  _PrepareForReferenceResolution             1 calls
+        0 ms  _PrepareForBuild                           1 calls
+        0 ms  SetTelemetryEnvironmentVariables           1 calls
+        0 ms  AfterBuild                                 1 calls
+        0 ms  BuildGenerateSourcesTraverse               1 calls
+        0 ms  ResolveReferences                          1 calls
+        0 ms  PreBuildEvent                              1 calls
+        0 ms  AddPublicBMIsToProjectsInfoForReference    1 calls
+        0 ms  AddPublicIncludeDirectoriesToProjectsInfoForReference   1 calls
+        0 ms  GetPublicIncludeDirectories                1 calls
+        0 ms  DisableProjectReferenceRecursionForClInputs   1 calls
+        0 ms  _BuildLinkAction                           1 calls
+        0 ms  FindReferenceAssembliesForReferences       1 calls
+        0 ms  ComputeCLInputPDBName                      1 calls
+        0 ms  BeforeClCompile                            1 calls
+        0 ms  BeforeBuildGenerateSources                 1 calls
+        0 ms  BuildGenerateSources                       1 calls
+        0 ms  _BuildGenerateSourcesAction                1 calls
+        0 ms  AfterBuildGenerateSourcesEvent             1 calls
+        0 ms  BuildCompileTraverse                       1 calls
+        0 ms  CopyFileToFolders                          1 calls
+        0 ms  _Midl                                      1 calls
+        0 ms  AfterMidl                                  1 calls
+        0 ms  ComputeMIDLGeneratedCompileInputs          1 calls
+        0 ms  _SelectedFiles                             1 calls
+        0 ms  _Xsd                                       1 calls
+        0 ms  AfterBuildGenerateSources                  1 calls
+        0 ms  BuildLink                                  1 calls
+        0 ms  ComputeCustomBuildOutput                   1 calls
+        0 ms  SelectCustomBuild                          1 calls
+        1 ms  SelectClCompile                            1 calls
+        1 ms  SplitResourcesByCulture                    1 calls
+        1 ms  PreLinkEvent                               1 calls
+        1 ms  GetProjectInfoForReference                 1 calls
+        1 ms  GetCopyToOutputDirectoryItems              1 calls
+        1 ms  _GetCopyToOutputDirectoryItemsFromTransitiveProjectReferences   1 calls
+        1 ms  MakeDirsForMidl                            1 calls
+        1 ms  _SplitProjectReferencesByFileExistence     1 calls
+        1 ms  AddExternalIncludDirectoriesToPaths        1 calls
+        1 ms  ComputeReferenceCLInput                    1 calls
+        1 ms  TlogCleanup                                1 calls
+        1 ms  _CheckForInvalidConfigurationAndPlatform   1 calls
+        1 ms  CreateRecipeFile                           1 calls
+        1 ms  MakeDirsForXdcMake                         1 calls
+        2 ms  InitializeBuildStatus                      1 calls
+        2 ms  GetReferencedVCProjectsInfo                1 calls
+        2 ms  PrepareForBuild                            1 calls
+        3 ms  FixupCLCompileOptions                      1 calls
+        3 ms  ResolveProjectReferences                   1 calls
+        4 ms  ExpandSDKReferences                        1 calls
+       49 ms  CustomBuild                                1 calls
+       92 ms  Lib                                        1 calls
+     9525 ms  ClCompile                                  1 calls
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:09.69

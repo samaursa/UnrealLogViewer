@@ -1,0 +1,16 @@
+2025/07/15-00:54:25.042000 27196 Creating DB D:\Repos\UnrealLogViewer\build\_ReSharper.Caches\ReSharperPlatformVs17251_06214b5f.UnrealLogViewer.00\Db since it was missing.
+2025/07/15-00:54:25.057000 27196 Delete type=3 #1
+2025/07/15-00:54:38.158000 59500 Level-0 table #5: started
+2025/07/15-00:54:38.189000 59500 Level-0 table #5: 5442636 bytes OK
+2025/07/15-00:54:38.191000 59500 Delete type=0 #3
+2025/07/15-01:40:03.550000 59500 Level-0 table #7: started
+2025/07/15-01:40:03.566000 59500 Level-0 table #7: 4060160 bytes OK
+2025/07/15-01:40:03.569000 59500 Delete type=0 #4
+2025/07/15-01:40:08.591000 59500 Compacting 1@1 + 1@2 files
+2025/07/15-01:40:08.602000 59500 Generated table #8@1: 1287 keys, 2110802 bytes
+2025/07/15-01:40:08.611000 59500 Generated table #9@1: 1844 keys, 2133757 bytes
+2025/07/15-01:40:08.616000 59500 Generated table #10@1: 269 keys, 390333 bytes
+2025/07/15-01:40:08.616000 59500 Compacted 1@1 + 1@2 files => 4634892 bytes
+2025/07/15-01:40:08.618000 59500 compacted to: files[ 0 0 3 0 0 0 0 ]
+2025/07/15-01:40:08.619000 59500 Delete type=2 #5
+2025/07/15-01:40:08.619000 59500 Delete type=2 #7

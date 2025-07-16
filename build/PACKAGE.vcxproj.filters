@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="D:\Repos\UnrealLogViewer\build\CMakeFiles\a82d59aa2ba60e67fe1391be081ef3fe\PACKAGE_force.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{F8038EB1-BB52-308D-B696-898C71607D60}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

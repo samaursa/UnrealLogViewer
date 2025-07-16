@@ -19,28 +19,9 @@ endif()
 
 # Create the executable with all source files
 add_executable(unreal_log_viewer
-  main.cpp
-  log_entry.cpp
-  filter_manager.cpp
-  log_viewer.cpp
-  ui_renderer.cpp
-  input_window.cpp
-  window_switcher.cpp
-  input_manager.cpp
-  log_window.cpp
-  expanded_window.cpp
+  macros.h
 
-  # Header files for IDE support
-  log_entry.h
-  filter_manager.h
-  log_viewer.h
-  ui_renderer.h
-  input_window.h
-  window_switcher.h
-  input_manager.h
-  log_window.h
-  expanded_window.h
-  hierarchical_search_manager.h
+  main.cpp
 )
 
 # Link FTXUI libraries

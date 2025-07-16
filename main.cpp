@@ -1,94 +1,78 @@
-﻿#include "log_viewer.h"
-#include "input_manager.h"
-#include "ftxui/component/screen_interactive.hpp"
+﻿#include "macros.h"
+
+#include <ftxui/component/component.hpp>
+#include <ftxui/component/screen_interactive.hpp>
+#include <ftxui/dom/elements.hpp> // For color
+#include <string>
+#include <vector>
 
 using namespace ftxui;
 
-Component LogViewer::CreateUI() {
-    if (file_path_.empty()) {
-        file_path_ = "test.log";
-    }
+namespace ue_log
+{
+    class Input
+    {
+        CK_GENERATED_BODY(Input);
 
-    auto manager = std::make_shared<InputManager>();
-    manager->AddInputWindow(0, "FILE", &file_path_, "Enter file path...");
-    manager->AddLogWindow(2, "LOG");
-    manager->AddExpandedWindow(3, "EXPANDED");
-    manager->SetupHierarchicalSearch();
-
-    manager->SetFilterManager(&filter_manager_);
-
-    manager->SetFileLoadCallback([this, manager]() {
-        manager->SetDebugMessage("Loading file: " + file_path_);
-        LoadFile();
-        manager->SetDebugMessage("Loaded " + std::to_string(log_entries_.size()) + " entries");
-        manager->SetLogEntries(&log_entries_);
-
-        // Initialize first search level with all entries
-        if (auto* search_mgr = manager->GetSearchManager()) {
-            std::vector<size_t> all_indices;
-            for (size_t i = 0; i < log_entries_.size(); ++i) {
-                all_indices.push_back(i);
-            }
-            search_mgr->UpdateFilteredIndices(0, all_indices);
+    public:
+        explicit Input(const char* InDefaultText = "Type here...")
+          : m_input(ftxui::Input(&m_data, InDefaultText))
+        {
         }
 
-        UpdateFilteredEntries();
-        if (auto* log_window = manager->GetLogWindow()) {
-            log_window->SetFilteredEntries(&filtered_indices_);
-        }
-    });
+    private:
+        std::string m_data;
+        ftxui::Component m_input;
 
-    manager->SetSearchUpdateCallback([this, manager]() {
-        if (auto* search_mgr = manager->GetSearchManager()) {
-            const auto& levels = search_mgr->GetSearchLevels();
-
-            // Start with all entries for level 0
-            std::vector<size_t> current_indices;
-            for (size_t i = 0; i < log_entries_.size(); ++i) {
-                current_indices.push_back(i);
-            }
-
-            // Apply each search level sequentially
-            for (size_t level = 0; level < levels.size(); ++level) {
-                const std::string& term = levels[level].term;
-                if (!term.empty()) {
-                    std::vector<size_t> filtered;
-                    for (size_t idx : current_indices) {
-                        if (filter_manager_.MatchesFilters(log_entries_[idx], term)) {
-                            filtered.push_back(idx);
-                        }
-                    }
-                    current_indices = filtered;
-                }
-
-                // Update this level's filtered indices
-                search_mgr->UpdateFilteredIndices(level, current_indices);
-            }
-
-            // Update the main filtered indices with the final result
-            filtered_indices_ = current_indices;
-            if (auto* log_window = manager->GetLogWindow()) {
-                log_window->SetFilteredEntries(&filtered_indices_);
-            }
-
-            manager->SetDebugMessage("Hierarchical search: " + std::to_string(filtered_indices_.size()) + " matches");
-        }
-    });
-
-    auto component = manager->CreateComponent();
-
-    return Renderer(component, [manager] {
-        return manager->Render();
-    });
+    public:
+        CK_PROPERTY_GET(m_data)
+        CK_PROPERTY_GET(m_input)
+    };
 }
 
-void LogViewer::Run() {
-    auto screen = ScreenInteractive::Fullscreen();
-    screen.Loop(CreateUI());
-}
+auto
+    main() -> int
+{
+    auto screen = ScreenInteractive::TerminalOutput();
 
-int main() {
-    LogViewer viewer;
-    viewer.Run();
+    std::string input;
+    std::vector<std::string> list_entries;
+    int list_selected = 0;
+
+    // Components
+    auto input_box = Input(&input, "Type here...");
+    auto listbox = Menu(&list_entries, &list_selected);
+
+    auto button = Button("Add", [&] {
+        if (!input.empty()) {
+            list_entries.push_back(input);
+            input.clear();
+        }
+    });
+
+    auto layout = Container::Vertical({
+        input_box,
+        button,
+        listbox
+    });
+
+    auto renderer = Renderer(layout, [&] {
+        return window(
+            text("FTXUI Sub-Window Example") | bold | color(Color::Cyan),
+            vbox({
+                hbox({
+                    text("Input: ") | color(Color::Yellow),
+                    input_box->Render() | color(Color::White)
+                }),
+                separator(),
+                button->Render() | color(Color::Green),
+                separator(),
+                text("Listbox:") | color(Color::LightSkyBlue1),
+                listbox->Render() | frame | size(HEIGHT, LESS_THAN, 10) | color(Color::GrayLight)
+            })
+        );
+    });
+
+    screen.Loop(renderer);
     return 0;
 }
