@@ -48,6 +48,18 @@ namespace ue_log {
         bool IsValid() const;
         std::string GetValidationError() const;
         
+        // Enhanced validation with detailed error reporting
+        struct ValidationResult {
+            bool is_valid;
+            std::vector<std::string> errors;
+            std::vector<std::string> warnings;
+        };
+        ValidationResult ValidateDetailed() const;
+        
+        // Fallback and recovery methods
+        void ApplyFallbackColors();
+        bool TryFixInvalidColors();
+        
         // Serialization
         std::string ToJson() const;
         static std::unique_ptr<ColorScheme> FromJson(const std::string& json_data);
@@ -86,6 +98,18 @@ namespace ue_log {
         // Validation
         bool IsValid() const;
         std::string GetValidationError() const;
+        
+        // Enhanced validation with detailed error reporting
+        struct ValidationResult {
+            bool is_valid;
+            std::vector<std::string> errors;
+            std::vector<std::string> warnings;
+        };
+        ValidationResult ValidateDetailed() const;
+        
+        // Fallback and recovery methods
+        void ApplyFallbackBindings();
+        bool TryFixInvalidBindings();
         
         // Serialization
         std::string ToJson() const;
@@ -151,6 +175,18 @@ namespace ue_log {
         // Validation
         bool IsValid() const;
         std::string GetValidationError() const;
+        
+        // Enhanced validation with detailed error reporting
+        struct ValidationResult {
+            bool is_valid;
+            std::vector<std::string> errors;
+            std::vector<std::string> warnings;
+        };
+        ValidationResult ValidateDetailed() const;
+        
+        // Fallback and recovery methods
+        void ApplyFallbackValues();
+        bool TryFixInvalidValues();
         
         // File operations
         Result LoadFromFile(const std::string& config_file_path);

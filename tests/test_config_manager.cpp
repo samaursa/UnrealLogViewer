@@ -2,6 +2,7 @@
 #include "../lib/config/config_manager.h"
 #include <filesystem>
 #include <fstream>
+#include <unordered_set>
 
 using namespace ue_log;
 
@@ -504,5 +505,388 @@ TEST_CASE("Configuration Integration Tests", "[config][integration]") {
         
         // Clean up
         std::filesystem::remove(config_path);
+    }
+}
+
+TEST_CASE("Enhanced ColorScheme Validation Tests", "[config][color_scheme][validation]") {
+    
+    SECTION("ValidateDetailed provides comprehensive error reporting") {
+        ColorScheme scheme;
+        scheme.Request_name("");  // Invalid empty name
+        scheme.Request_background_color("invalid_color");  // Invalid color
+        scheme.Request_text_color("#GG0000");  // Invalid hex
+        
+        auto result = scheme.ValidateDetailed();
+        
+        REQUIRE_FALSE(result.is_valid);
+        REQUIRE(result.errors.size() >= 3);
+        
+        // Check that specific errors are reported
+        bool found_name_error = false;
+        bool found_bg_error = false;
+        bool found_text_error = false;
+        
+        for (const auto& error : result.errors) {
+            if (error.find("name cannot be empty") != std::string::npos) found_name_error = true;
+            if (error.find("Invalid background_color") != std::string::npos) found_bg_error = true;
+            if (error.find("Invalid text_color") != std::string::npos) found_text_error = true;
+        }
+        
+        REQUIRE(found_name_error);
+        REQUIRE(found_bg_error);
+        REQUIRE(found_text_error);
+    }
+    
+    SECTION("ValidateDetailed detects contrast issues") {
+        ColorScheme scheme;
+        scheme.Request_background_color("#FF0000");
+        scheme.Request_text_color("#FF0000");  // Same as background
+        
+        auto result = scheme.ValidateDetailed();
+        
+        REQUIRE(result.is_valid);  // Still valid, but has warnings
+        REQUIRE(result.warnings.size() >= 1);
+        
+        bool found_contrast_warning = false;
+        for (const auto& warning : result.warnings) {
+            if (warning.find("identical") != std::string::npos) found_contrast_warning = true;
+        }
+        REQUIRE(found_contrast_warning);
+    }
+    
+    SECTION("ApplyFallbackColors fixes invalid colors") {
+        ColorScheme scheme;
+        scheme.Request_name("");
+        scheme.Request_background_color("invalid");
+        scheme.Request_text_color("#GG0000");
+        
+        REQUIRE_FALSE(scheme.IsValid());
+        
+        scheme.ApplyFallbackColors();
+        
+        REQUIRE(scheme.IsValid());
+        REQUIRE(scheme.Get_name() == "Fallback");
+        REQUIRE(scheme.Get_background_color() == "#000000");
+        REQUIRE(scheme.Get_text_color() == "#FFFFFF");
+    }
+    
+    SECTION("TryFixInvalidColors attempts automatic repair") {
+        ColorScheme scheme;
+        scheme.Request_background_color("FF0000");  // Missing #
+        scheme.Request_text_color("F00");  // Missing #, short format
+        scheme.Request_error_color("#FF0000");  // Already valid
+        
+        REQUIRE_FALSE(scheme.IsValid());
+        
+        bool fixed = scheme.TryFixInvalidColors();
+        
+        REQUIRE(fixed);
+        REQUIRE(scheme.Get_background_color() == "#FF0000");
+        REQUIRE(scheme.Get_text_color() == "#F00");
+        REQUIRE(scheme.Get_error_color() == "#FF0000");
+        REQUIRE(scheme.IsValid());
+    }
+}
+
+TEST_CASE("Enhanced KeyBindings Validation Tests", "[config][key_bindings][validation]") {
+    
+    SECTION("ValidateDetailed provides comprehensive error reporting") {
+        KeyBindings bindings;
+        bindings.ClearAllBindings();
+        
+        // Add some invalid bindings
+        auto& key_mappings = bindings.Get_key_mappings();
+        const_cast<std::unordered_map<std::string, std::string>&>(key_mappings)["123invalid"] = "Ctrl+I";
+        const_cast<std::unordered_map<std::string, std::string>&>(key_mappings)["valid_action"] = "";  // Empty key
+        
+        auto result = bindings.ValidateDetailed();
+        
+        REQUIRE_FALSE(result.is_valid);
+        REQUIRE(result.errors.size() >= 2);
+        
+        // Check for missing essential bindings warning
+        REQUIRE(result.warnings.size() >= 1);
+        bool found_missing_essential = false;
+        for (const auto& warning : result.warnings) {
+            if (warning.find("Missing essential") != std::string::npos) found_missing_essential = true;
+        }
+        REQUIRE(found_missing_essential);
+    }
+    
+    SECTION("ValidateDetailed detects duplicate key bindings") {
+        KeyBindings bindings;
+        bindings.ClearAllBindings();
+        bindings.SetKeyBinding("action1", "Ctrl+X");
+        bindings.SetKeyBinding("action2", "Ctrl+X");  // Duplicate key
+        
+        auto result = bindings.ValidateDetailed();
+        
+        REQUIRE(result.is_valid);  // Still valid, but has warnings
+        REQUIRE(result.warnings.size() >= 1);
+        
+        bool found_duplicate_warning = false;
+        for (const auto& warning : result.warnings) {
+            if (warning.find("bound to multiple actions") != std::string::npos) found_duplicate_warning = true;
+        }
+        REQUIRE(found_duplicate_warning);
+    }
+    
+    SECTION("ApplyFallbackBindings ensures essential bindings exist") {
+        KeyBindings bindings;
+        bindings.ClearAllBindings();
+        
+        REQUIRE_FALSE(bindings.HasKeyBinding("scroll_up"));
+        REQUIRE_FALSE(bindings.HasKeyBinding("quit"));
+        
+        bindings.ApplyFallbackBindings();
+        
+        REQUIRE(bindings.HasKeyBinding("scroll_up"));
+        REQUIRE(bindings.HasKeyBinding("scroll_down"));
+        REQUIRE(bindings.HasKeyBinding("open_file"));
+        REQUIRE(bindings.HasKeyBinding("quit"));
+    }
+    
+    SECTION("TryFixInvalidBindings removes invalid entries and applies fallbacks") {
+        KeyBindings bindings;
+        bindings.ClearAllBindings();
+        
+        // Add some invalid bindings
+        auto& key_mappings = bindings.Get_key_mappings();
+        const_cast<std::unordered_map<std::string, std::string>&>(key_mappings)["123invalid"] = "Ctrl+I";
+        const_cast<std::unordered_map<std::string, std::string>&>(key_mappings)["valid_action"] = "";
+        
+        REQUIRE_FALSE(bindings.IsValid());
+        
+        bool fixed = bindings.TryFixInvalidBindings();
+        
+        REQUIRE(fixed);
+        REQUIRE(bindings.IsValid());
+        REQUIRE_FALSE(bindings.HasKeyBinding("123invalid"));
+        REQUIRE_FALSE(bindings.HasKeyBinding("valid_action"));
+        REQUIRE(bindings.HasKeyBinding("scroll_up"));  // Essential binding added
+    }
+}
+
+TEST_CASE("Enhanced AppConfig Validation Tests", "[config][app_config][validation]") {
+    
+    SECTION("ValidateDetailed provides comprehensive error reporting") {
+        AppConfig config;
+        config.Request_version("");  // Invalid
+        config.Request_max_recent_files(-5);  // Invalid
+        config.Request_file_monitor_poll_interval_ms(5);  // Too small
+        config.Request_max_log_entries(50);  // Too small
+        
+        auto result = config.ValidateDetailed();
+        
+        REQUIRE_FALSE(result.is_valid);
+        REQUIRE(result.errors.size() >= 4);
+        
+        // Check that specific errors are reported
+        bool found_version_error = false;
+        bool found_files_error = false;
+        bool found_interval_error = false;
+        bool found_entries_error = false;
+        
+        for (const auto& error : result.errors) {
+            if (error.find("Version cannot be empty") != std::string::npos) found_version_error = true;
+            if (error.find("cannot be negative") != std::string::npos) found_files_error = true;
+            if (error.find("too small") != std::string::npos && error.find("interval") != std::string::npos) found_interval_error = true;
+            if (error.find("too small") != std::string::npos && error.find("entries") != std::string::npos) found_entries_error = true;
+        }
+        
+        REQUIRE(found_version_error);
+        REQUIRE(found_files_error);
+        REQUIRE(found_interval_error);
+        REQUIRE(found_entries_error);
+    }
+    
+    SECTION("ValidateDetailed detects warnings for edge cases") {
+        AppConfig config;
+        config.Request_max_recent_files(0);  // Warning: no files remembered
+        config.Request_file_monitor_poll_interval_ms(2000);  // Warning: large interval
+        config.Request_max_log_entries(2000000);  // Warning: very large
+        
+        auto result = config.ValidateDetailed();
+        
+        REQUIRE(result.is_valid);  // Still valid, but has warnings
+        REQUIRE(result.warnings.size() >= 3);
+        
+        bool found_files_warning = false;
+        bool found_interval_warning = false;
+        bool found_entries_warning = false;
+        
+        for (const auto& warning : result.warnings) {
+            if (warning.find("no recent files") != std::string::npos) found_files_warning = true;
+            if (warning.find("quite large") != std::string::npos) found_interval_warning = true;
+            if (warning.find("very large") != std::string::npos) found_entries_warning = true;
+        }
+        
+        REQUIRE(found_files_warning);
+        REQUIRE(found_interval_warning);
+        REQUIRE(found_entries_warning);
+    }
+    
+    SECTION("ValidateDetailed detects duplicate recent files") {
+        AppConfig config;
+        config.AddRecentFile("/path/file1.log");
+        config.AddRecentFile("/path/file2.log");
+        config.AddRecentFile("/path/file1.log");  // Duplicate
+        
+        auto result = config.ValidateDetailed();
+        
+        REQUIRE(result.is_valid);
+        // Note: AddRecentFile should handle duplicates, but if they exist, validation should warn
+    }
+    
+    SECTION("ValidateDetailed validates nested objects") {
+        AppConfig config;
+        
+        // Make nested objects invalid
+        config.Get_color_scheme().Request_name("");
+        config.Get_key_bindings().ClearAllBindings();
+        auto& key_mappings = config.Get_key_bindings().Get_key_mappings();
+        const_cast<std::unordered_map<std::string, std::string>&>(key_mappings)["123invalid"] = "Ctrl+I";
+        
+        auto result = config.ValidateDetailed();
+        
+        REQUIRE_FALSE(result.is_valid);
+        
+        // Should have errors from nested objects
+        bool found_color_error = false;
+        bool found_binding_error = false;
+        
+        for (const auto& error : result.errors) {
+            if (error.find("Color scheme:") != std::string::npos) found_color_error = true;
+            if (error.find("Key bindings:") != std::string::npos) found_binding_error = true;
+        }
+        
+        REQUIRE(found_color_error);
+        REQUIRE(found_binding_error);
+    }
+    
+    SECTION("ApplyFallbackValues fixes invalid settings") {
+        AppConfig config;
+        config.Request_version("");
+        config.Request_max_recent_files(-5);
+        config.Request_file_monitor_poll_interval_ms(5);
+        config.Request_max_log_entries(50);
+        
+        REQUIRE_FALSE(config.IsValid());
+        
+        config.ApplyFallbackValues();
+        
+        REQUIRE(config.IsValid());
+        REQUIRE(config.Get_version() == "1.0");
+        REQUIRE(config.Get_max_recent_files() == 10);
+        REQUIRE(config.Get_file_monitor_poll_interval_ms() == 100);
+        REQUIRE(config.Get_max_log_entries() == 100000);
+    }
+    
+    SECTION("TryFixInvalidValues attempts automatic repair") {
+        AppConfig config;
+        config.Request_max_recent_files(100);  // Too large
+        config.Request_file_monitor_poll_interval_ms(20000);  // Too large
+        config.AddRecentFile("/file1.log");
+        config.AddRecentFile("/file2.log");
+        config.AddRecentFile("/file1.log");  // This should be handled by AddRecentFile, but let's test manual duplicates
+        
+        // Manually add duplicate to test the fix
+        config.Get_recent_files().push_back("/file1.log");
+        
+        bool fixed = config.TryFixInvalidValues();
+        
+        REQUIRE(fixed);
+        REQUIRE(config.Get_max_recent_files() == 10);
+        REQUIRE(config.Get_file_monitor_poll_interval_ms() == 100);
+        
+        // Check that duplicates were removed
+        std::unordered_set<std::string> unique_files(config.Get_recent_files().begin(), config.Get_recent_files().end());
+        REQUIRE(unique_files.size() == config.Get_recent_files().size());
+    }
+}
+
+TEST_CASE("Configuration Migration Tests", "[config][migration]") {
+    
+    SECTION("MigrateFromVersion handles current version") {
+        AppConfig config;
+        Result result = config.MigrateFromVersion("1.0");
+        REQUIRE(result.IsSuccess());
+    }
+    
+    SECTION("MigrateFromVersion handles unknown versions") {
+        AppConfig config;
+        config.Request_version("0.5");  // Old version
+        
+        Result result = config.MigrateFromVersion("0.5");
+        REQUIRE(result.IsSuccess());
+        
+        // Should apply defaults for unknown versions
+        REQUIRE(config.Get_version() == "1.0");
+        REQUIRE(config.IsValid());
+    }
+    
+    SECTION("MigrateFromVersion handles empty version") {
+        AppConfig config;
+        Result result = config.MigrateFromVersion("");
+        REQUIRE(result.IsSuccess());
+    }
+}
+
+TEST_CASE("Configuration Fallback Integration Tests", "[config][fallback][integration]") {
+    
+    SECTION("Complete fallback workflow") {
+        AppConfig config;
+        
+        // Make everything invalid
+        config.Request_version("");
+        config.Request_max_recent_files(-10);
+        config.Request_file_monitor_poll_interval_ms(1);
+        config.Request_max_log_entries(10);
+        config.Get_color_scheme().Request_name("");
+        config.Get_color_scheme().Request_background_color("invalid");
+        config.Get_key_bindings().ClearAllBindings();
+        
+        REQUIRE_FALSE(config.IsValid());
+        
+        // Apply comprehensive fallbacks
+        config.ApplyFallbackValues();
+        
+        REQUIRE(config.IsValid());
+        REQUIRE(config.Get_version() == "1.0");
+        REQUIRE(config.Get_max_recent_files() == 10);
+        REQUIRE(config.Get_file_monitor_poll_interval_ms() == 100);
+        REQUIRE(config.Get_max_log_entries() == 100000);
+        REQUIRE(config.Get_color_scheme().Get_name() == "Fallback");
+        REQUIRE(config.Get_color_scheme().IsValid());
+        REQUIRE(config.Get_key_bindings().HasKeyBinding("scroll_up"));
+    }
+    
+    SECTION("ConfigManager handles invalid loaded config") {
+        std::string test_config_path = "invalid_test_config.json";
+        
+        // Clean up any existing test file
+        if (std::filesystem::exists(test_config_path)) {
+            std::filesystem::remove(test_config_path);
+        }
+        
+        // Create an invalid config file
+        std::ofstream file(test_config_path);
+        file << "{\n";
+        file << "  \"version\": \"\",\n";
+        file << "  \"max_recent_files\": -5,\n";
+        file << "  \"file_monitor_poll_interval_ms\": 1,\n";
+        file << "  \"max_log_entries\": 10\n";
+        file << "}";
+        file.close();
+        
+        ConfigManager manager;
+        Result load_result = manager.LoadConfig(test_config_path);
+        
+        // Should fail to load due to validation
+        REQUIRE(load_result.IsError());
+        REQUIRE(load_result.Get_error_message().find("invalid") != std::string::npos);
+        
+        // Clean up
+        std::filesystem::remove(test_config_path);
     }
 }

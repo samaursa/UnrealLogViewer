@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <regex>
+#include <unordered_set>
 
 namespace ue_log {
     
@@ -57,6 +58,89 @@ namespace ue_log {
         if (!IsValidColor(border_color)) return "Invalid border color: " + border_color;
         
         return "";
+    }
+    
+    ColorScheme::ValidationResult ColorScheme::ValidateDetailed() const {
+        ValidationResult result;
+        result.is_valid = true;
+        
+        // Check name
+        if (name.empty()) {
+            result.errors.push_back("Color scheme name cannot be empty");
+            result.is_valid = false;
+        } else if (name.length() > 50) {
+            result.warnings.push_back("Color scheme name is very long (>" + std::to_string(name.length()) + " characters)");
+        }
+        
+        // Check all colors
+        std::vector<std::pair<std::string, std::string>> colors = {
+            {"background_color", background_color},
+            {"text_color", text_color},
+            {"highlight_color", highlight_color},
+            {"error_color", error_color},
+            {"warning_color", warning_color},
+            {"info_color", info_color},
+            {"debug_color", debug_color},
+            {"selection_color", selection_color},
+            {"border_color", border_color}
+        };
+        
+        for (const auto& color_pair : colors) {
+            if (!IsValidColor(color_pair.second)) {
+                result.errors.push_back("Invalid " + color_pair.first + ": '" + color_pair.second + "' (expected format: #RGB or #RRGGBB)");
+                result.is_valid = false;
+            }
+        }
+        
+        // Check for potential contrast issues (warnings only)
+        if (background_color == text_color) {
+            result.warnings.push_back("Background and text colors are identical - this may cause readability issues");
+        }
+        
+        return result;
+    }
+    
+    void ColorScheme::ApplyFallbackColors() {
+        // Apply safe fallback colors if current colors are invalid
+        if (!IsValidColor(background_color)) background_color = "#000000";
+        if (!IsValidColor(text_color)) text_color = "#FFFFFF";
+        if (!IsValidColor(highlight_color)) highlight_color = "#FFFF00";
+        if (!IsValidColor(error_color)) error_color = "#FF0000";
+        if (!IsValidColor(warning_color)) warning_color = "#FFA500";
+        if (!IsValidColor(info_color)) info_color = "#00FF00";
+        if (!IsValidColor(debug_color)) debug_color = "#808080";
+        if (!IsValidColor(selection_color)) selection_color = "#0080FF";
+        if (!IsValidColor(border_color)) border_color = "#808080";
+        
+        if (name.empty()) name = "Fallback";
+    }
+    
+    bool ColorScheme::TryFixInvalidColors() {
+        bool fixed_any = false;
+        
+        // Try to fix common color format issues
+        std::vector<std::string*> color_ptrs = {
+            &background_color, &text_color, &highlight_color, &error_color,
+            &warning_color, &info_color, &debug_color, &selection_color, &border_color
+        };
+        
+        for (auto* color_ptr : color_ptrs) {
+            std::string& color = *color_ptr;
+            if (!IsValidColor(color)) {
+                // Try to fix missing # prefix
+                if (color.length() == 6 && std::all_of(color.begin(), color.end(), 
+                    [](char c) { return std::isxdigit(c); })) {
+                    color = "#" + color;
+                    fixed_any = true;
+                } else if (color.length() == 3 && std::all_of(color.begin(), color.end(), 
+                    [](char c) { return std::isxdigit(c); })) {
+                    color = "#" + color;
+                    fixed_any = true;
+                }
+            }
+        }
+        
+        return fixed_any;
     }
     
     std::string ColorScheme::ToJson() const {
@@ -246,6 +330,94 @@ namespace ue_log {
         return "";
     }
     
+    KeyBindings::ValidationResult KeyBindings::ValidateDetailed() const {
+        ValidationResult result;
+        result.is_valid = true;
+        
+        // Check if we have any key bindings at all
+        if (key_mappings.empty()) {
+            result.warnings.push_back("No key bindings defined - using defaults");
+        }
+        
+        // Check each key binding
+        for (const auto& pair : key_mappings) {
+            if (!IsValidAction(pair.first)) {
+                result.errors.push_back("Invalid action name: '" + pair.first + "' (must start with letter/underscore and contain only alphanumeric characters and underscores)");
+                result.is_valid = false;
+            }
+            if (!IsValidKey(pair.second)) {
+                result.errors.push_back("Invalid key binding: '" + pair.second + "' for action '" + pair.first + "'");
+                result.is_valid = false;
+            }
+        }
+        
+        // Check for essential key bindings
+        std::vector<std::string> essential_actions = {
+            "scroll_up", "scroll_down", "open_file", "quit"
+        };
+        
+        for (const auto& action : essential_actions) {
+            if (!HasKeyBinding(action)) {
+                result.warnings.push_back("Missing essential key binding for action: " + action);
+            }
+        }
+        
+        // Check for duplicate key bindings
+        std::unordered_map<std::string, std::vector<std::string>> key_to_actions;
+        for (const auto& pair : key_mappings) {
+            key_to_actions[pair.second].push_back(pair.first);
+        }
+        
+        for (const auto& key_actions : key_to_actions) {
+            if (key_actions.second.size() > 1) {
+                std::string actions_list;
+                for (size_t i = 0; i < key_actions.second.size(); ++i) {
+                    if (i > 0) actions_list += ", ";
+                    actions_list += key_actions.second[i];
+                }
+                result.warnings.push_back("Key '" + key_actions.first + "' is bound to multiple actions: " + actions_list);
+            }
+        }
+        
+        return result;
+    }
+    
+    void KeyBindings::ApplyFallbackBindings() {
+        // Apply essential key bindings if they're missing or invalid
+        if (!HasKeyBinding("scroll_up") || !IsValidKey(GetKeyBinding("scroll_up"))) {
+            SetKeyBinding("scroll_up", "Up");
+        }
+        if (!HasKeyBinding("scroll_down") || !IsValidKey(GetKeyBinding("scroll_down"))) {
+            SetKeyBinding("scroll_down", "Down");
+        }
+        if (!HasKeyBinding("open_file") || !IsValidKey(GetKeyBinding("open_file"))) {
+            SetKeyBinding("open_file", "Ctrl+O");
+        }
+        if (!HasKeyBinding("quit") || !IsValidKey(GetKeyBinding("quit"))) {
+            SetKeyBinding("quit", "Ctrl+Q");
+        }
+    }
+    
+    bool KeyBindings::TryFixInvalidBindings() {
+        bool fixed_any = false;
+        
+        // Remove invalid key bindings
+        auto it = key_mappings.begin();
+        while (it != key_mappings.end()) {
+            if (!IsValidAction(it->first) || !IsValidKey(it->second)) {
+                it = key_mappings.erase(it);
+                fixed_any = true;
+            } else {
+                ++it;
+            }
+        }
+        
+        // Apply fallback bindings for essential actions
+        ApplyFallbackBindings();
+        
+        return fixed_any;
+    }
+    
     std::string KeyBindings::ToJson() const {
         std::ostringstream oss;
         oss << "{\n";
@@ -411,6 +583,156 @@ namespace ue_log {
         if (!key_bindings.IsValid()) return "Key bindings are invalid: " + key_bindings.GetValidationError();
         
         return "";
+    }
+    
+    AppConfig::ValidationResult AppConfig::ValidateDetailed() const {
+        ValidationResult result;
+        result.is_valid = true;
+        
+        // Check version
+        if (version.empty()) {
+            result.errors.push_back("Version cannot be empty");
+            result.is_valid = false;
+        } else if (version.length() > 20) {
+            result.warnings.push_back("Version string is very long (>" + std::to_string(version.length()) + " characters)");
+        }
+        
+        // Check max recent files
+        if (max_recent_files < 0) {
+            result.errors.push_back("Max recent files cannot be negative (current: " + std::to_string(max_recent_files) + ")");
+            result.is_valid = false;
+        } else if (max_recent_files > 50) {
+            result.errors.push_back("Max recent files is too large (current: " + std::to_string(max_recent_files) + ", max: 50)");
+            result.is_valid = false;
+        } else if (max_recent_files == 0) {
+            result.warnings.push_back("Max recent files is set to 0 - no recent files will be remembered");
+        }
+        
+        // Check file monitor poll interval
+        if (file_monitor_poll_interval_ms < 10) {
+            result.errors.push_back("File monitor poll interval is too small (current: " + std::to_string(file_monitor_poll_interval_ms) + "ms, min: 10ms)");
+            result.is_valid = false;
+        } else if (file_monitor_poll_interval_ms > 10000) {
+            result.errors.push_back("File monitor poll interval is too large (current: " + std::to_string(file_monitor_poll_interval_ms) + "ms, max: 10s)");
+            result.is_valid = false;
+        } else if (file_monitor_poll_interval_ms > 1000) {
+            result.warnings.push_back("File monitor poll interval is quite large (" + std::to_string(file_monitor_poll_interval_ms) + "ms) - may affect real-time responsiveness");
+        }
+        
+        // Check max log entries
+        if (max_log_entries < 100) {
+            result.errors.push_back("Max log entries is too small (current: " + std::to_string(max_log_entries) + ", min: 100)");
+            result.is_valid = false;
+        } else if (max_log_entries > 10000000) {
+            result.errors.push_back("Max log entries is too large (current: " + std::to_string(max_log_entries) + ", max: 10M)");
+            result.is_valid = false;
+        } else if (max_log_entries > 1000000) {
+            result.warnings.push_back("Max log entries is very large (" + std::to_string(max_log_entries) + ") - may affect memory usage");
+        }
+        
+        // Check recent files list consistency
+        if (recent_files.size() > static_cast<size_t>(max_recent_files)) {
+            result.warnings.push_back("Recent files list has more entries (" + std::to_string(recent_files.size()) + ") than max_recent_files setting (" + std::to_string(max_recent_files) + ")");
+        }
+        
+        // Check for duplicate recent files
+        std::unordered_set<std::string> unique_files;
+        for (const auto& file : recent_files) {
+            if (unique_files.find(file) != unique_files.end()) {
+                result.warnings.push_back("Duplicate entry in recent files: " + file);
+            }
+            unique_files.insert(file);
+        }
+        
+        // Check last opened file
+        if (!last_opened_file.empty() && !std::filesystem::exists(last_opened_file)) {
+            result.warnings.push_back("Last opened file no longer exists: " + last_opened_file);
+        }
+        
+        // Validate nested objects
+        auto color_validation = color_scheme.ValidateDetailed();
+        if (!color_validation.is_valid) {
+            result.is_valid = false;
+            for (const auto& error : color_validation.errors) {
+                result.errors.push_back("Color scheme: " + error);
+            }
+        }
+        for (const auto& warning : color_validation.warnings) {
+            result.warnings.push_back("Color scheme: " + warning);
+        }
+        
+        auto bindings_validation = key_bindings.ValidateDetailed();
+        if (!bindings_validation.is_valid) {
+            result.is_valid = false;
+            for (const auto& error : bindings_validation.errors) {
+                result.errors.push_back("Key bindings: " + error);
+            }
+        }
+        for (const auto& warning : bindings_validation.warnings) {
+            result.warnings.push_back("Key bindings: " + warning);
+        }
+        
+        return result;
+    }
+    
+    void AppConfig::ApplyFallbackValues() {
+        // Apply safe fallback values for invalid settings
+        if (version.empty()) version = "1.0";
+        if (max_recent_files < 0 || max_recent_files > 50) max_recent_files = 10;
+        if (file_monitor_poll_interval_ms < 10 || file_monitor_poll_interval_ms > 10000) file_monitor_poll_interval_ms = 100;
+        if (max_log_entries < 100 || max_log_entries > 10000000) max_log_entries = 100000;
+        
+        // Trim recent files list if it's too long
+        if (recent_files.size() > static_cast<size_t>(max_recent_files)) {
+            recent_files.resize(max_recent_files);
+        }
+        
+        // Apply fallbacks for nested objects
+        color_scheme.ApplyFallbackColors();
+        key_bindings.ApplyFallbackBindings();
+    }
+    
+    bool AppConfig::TryFixInvalidValues() {
+        bool fixed_any = false;
+        
+        // Fix invalid numeric values
+        if (max_recent_files < 0 || max_recent_files > 50) {
+            max_recent_files = 10;
+            fixed_any = true;
+        }
+        if (file_monitor_poll_interval_ms < 10 || file_monitor_poll_interval_ms > 10000) {
+            file_monitor_poll_interval_ms = 100;
+            fixed_any = true;
+        }
+        if (max_log_entries < 100 || max_log_entries > 10000000) {
+            max_log_entries = 100000;
+            fixed_any = true;
+        }
+        
+        // Remove duplicate recent files
+        std::unordered_set<std::string> unique_files;
+        auto it = recent_files.begin();
+        while (it != recent_files.end()) {
+            if (unique_files.find(*it) != unique_files.end()) {
+                it = recent_files.erase(it);
+                fixed_any = true;
+            } else {
+                unique_files.insert(*it);
+                ++it;
+            }
+        }
+        
+        // Trim recent files list if needed
+        if (recent_files.size() > static_cast<size_t>(max_recent_files)) {
+            recent_files.resize(max_recent_files);
+            fixed_any = true;
+        }
+        
+        // Try to fix nested objects
+        if (color_scheme.TryFixInvalidColors()) fixed_any = true;
+        if (key_bindings.TryFixInvalidBindings()) fixed_any = true;
+        
+        return fixed_any;
     }
     
     Result AppConfig::LoadFromFile(const std::string& config_file_path) {

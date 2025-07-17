@@ -128,7 +128,10 @@
     - Write unit tests for configuration loading and saving
     - _Requirements: 8.1, 8.2, 8.3, 9.4_
 
-  - [ ] 6.2 Add configuration validation and defaults
+  - [x] 6.2 Add configuration validation and defaults
+
+
+
     - Implement configuration validation with helpful error messages
     - Add default configuration values and fallback handling
     - Create configuration migration for version compatibility
@@ -136,7 +139,8 @@
     - _Requirements: 8.4, 8.5_
 
 - [ ] 7. Build FTXUI user interface components
-  - [ ] 7.1 Create MainWindow class structure
+  - [-] 7.1 Create MainWindow class structure
+
     - Implement MainWindow using CK_GENERATED_BODY macro
     - Set up basic FTXUI component structure and layout
     - Add integration points for LogParser, FilterEngine, and FileMonitor
