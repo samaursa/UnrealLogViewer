@@ -1,0 +1,1 @@
+// Main window UI implementation - to be implemented in task 7

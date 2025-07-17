@@ -4,43 +4,109 @@ project(UnrealLogViewer)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Find or fetch FTXUI
+# Enable threading support
+find_package(Threads REQUIRED)
+
+# Find or fetch dependencies
 include(FetchContent)
+
+# FTXUI for terminal UI
 FetchContent_Declare(ftxui
   GIT_REPOSITORY https://github.com/ArthurSonzogni/FTXUI.git
   GIT_TAG v5.0.0
 )
 
-FetchContent_GetProperties(ftxui)
-if(NOT ftxui_POPULATED)
-  FetchContent_Populate(ftxui)
-  add_subdirectory(${ftxui_SOURCE_DIR} ${ftxui_BINARY_DIR} EXCLUDE_FROM_ALL)
-endif()
-
-# Create the executable with all source files
-add_executable(unreal_log_viewer
-  macros.h
-
-  main.cpp
+# MIO for memory-mapped file I/O
+FetchContent_Declare(mio
+  GIT_REPOSITORY https://github.com/mandreyel/mio.git
+  GIT_TAG master
 )
 
-# Link FTXUI libraries
+# Catch2 for unit testing
+FetchContent_Declare(Catch2
+  GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+  GIT_TAG v3.4.0
+)
+
+# Make dependencies available
+FetchContent_MakeAvailable(ftxui mio Catch2)
+
+# Create the core logging library
+add_library(unreal_log_lib
+  macros.h
+  lib/common/result.h
+  lib/common/result.cpp
+  lib/log_parser/log_entry.h
+  lib/log_parser/log_entry.cpp
+  lib/log_parser/log_parser.h
+  lib/log_parser/log_parser.cpp
+  lib/filter_engine/filter.h
+  lib/filter_engine/filter_engine.h
+  lib/filter_engine/filter_engine.cpp
+  lib/file_monitor/file_monitor.h
+  lib/file_monitor/file_monitor.cpp
+  lib/config/config_manager.h
+  lib/config/config_manager.cpp
+)
+
+# Set library properties
+target_include_directories(unreal_log_lib PUBLIC 
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}/lib
+)
+
+# Link library dependencies
+target_link_libraries(unreal_log_lib
+  PUBLIC mio::mio
+  PUBLIC Threads::Threads
+)
+
+# Create the main application executable
+add_executable(unreal_log_viewer
+  app/main.cpp
+  app/ui/main_window.h
+  app/ui/main_window.cpp
+  app/ui/filter_panel.h
+  app/ui/filter_panel.cpp
+)
+
+# Link main application dependencies
 target_link_libraries(unreal_log_viewer
+  PRIVATE unreal_log_lib
   PRIVATE ftxui::screen
   PRIVATE ftxui::dom
   PRIVATE ftxui::component
 )
 
-# Enable threading support
-find_package(Threads REQUIRED)
-target_link_libraries(unreal_log_viewer PRIVATE Threads::Threads)
+# Create the test application executable
+add_executable(unreal_log_tests
+  tests/test_main.cpp
+  tests/test_log_parser.cpp
+  tests/test_filter_engine.cpp
+  tests/test_result.cpp
+)
 
-# Compiler-specific options
+# Link test application dependencies
+target_link_libraries(unreal_log_tests
+  PRIVATE unreal_log_lib
+  PRIVATE Catch2::Catch2WithMain
+)
+
+# Compiler-specific options for all targets
 if(MSVC)
+    target_compile_options(unreal_log_lib PRIVATE /W4)
     target_compile_options(unreal_log_viewer PRIVATE /W4)
+    target_compile_options(unreal_log_tests PRIVATE /W4)
 else()
+    target_compile_options(unreal_log_lib PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(unreal_log_viewer PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(unreal_log_tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-# Install target
+# Enable testing
+enable_testing()
+add_test(NAME unreal_log_unit_tests COMMAND unreal_log_tests)
+
+# Install targets
 install(TARGETS unreal_log_viewer DESTINATION bin)
+install(TARGETS unreal_log_tests DESTINATION bin)
