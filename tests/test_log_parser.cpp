@@ -928,3 +928,89 @@ TEST_CASE("LogParser handles edge cases in detailed parsing", "[log_parser]") {
         REQUIRE(entry.Get_message() == " ");
     }
 }
+
+TEST_CASE("LogParser handles real Unreal Engine sample log file", "[log_parser][integration]") {
+    LogParser parser;
+    std::string sample_file = "tests/sample_logs/unreal_sample.log";
+    
+    // Check if sample file exists
+    if (!std::filesystem::exists(sample_file)) {
+        SKIP("Sample log file not found: " + sample_file);
+    }
+    
+    SECTION("Load real sample log file") {
+        Result result = parser.LoadFile(sample_file);
+        REQUIRE(result.IsSuccess());
+        REQUIRE(parser.IsFileLoaded());
+        REQUIRE(parser.IsValid());
+        
+        // Get basic file statistics
+        size_t file_size = parser.GetFileSize();
+        size_t total_lines = parser.GetTotalLineCount();
+        
+        REQUIRE(file_size > 0);
+        REQUIRE(total_lines > 0);
+        
+        INFO("Sample file size: " << file_size << " bytes, " << total_lines << " lines");
+    }
+    
+    SECTION("Parse sample with limited entries") {
+        Result result = parser.LoadFile(sample_file);
+        REQUIRE(result.IsSuccess());
+        
+        // Parse only first 50 lines to avoid overwhelming output
+        std::vector<std::string> lines = parser.SplitIntoLines(0, 50);
+        REQUIRE(lines.size() > 0);
+        
+        // Count different entry types in the sample
+        size_t structured_count = 0;
+        size_t semi_structured_count = 0;
+        size_t unstructured_count = 0;
+        
+        for (size_t i = 0; i < lines.size(); ++i) {
+            LogEntryType type = parser.DetectEntryType(lines[i]);
+            switch (type) {
+                case LogEntryType::Structured: structured_count++; break;
+                case LogEntryType::SemiStructured: semi_structured_count++; break;
+                case LogEntryType::Unstructured: unstructured_count++; break;
+            }
+        }
+        
+        INFO("Entry types in first 50 lines - Structured: " << structured_count 
+             << ", Semi-structured: " << semi_structured_count 
+             << ", Unstructured: " << unstructured_count);
+        
+        // Should have at least some valid entries
+        REQUIRE(structured_count + semi_structured_count + unstructured_count > 0);
+    }
+    
+    SECTION("Performance test with limited parsing") {
+        Result result = parser.LoadFile(sample_file);
+        REQUIRE(result.IsSuccess());
+        
+        // Measure parsing performance on first 1000 lines only
+        auto start_time = std::chrono::high_resolution_clock::now();
+        
+        std::vector<std::string> lines = parser.SplitIntoLines(0, 1000);
+        size_t parsed_count = 0;
+        
+        for (size_t i = 0; i < lines.size(); ++i) {
+            if (!lines[i].empty() && lines[i].find(':') != std::string::npos) {
+                LogEntry entry = parser.ParseSingleEntry(lines[i], i);
+                if (entry.IsValid()) {
+                    parsed_count++;
+                }
+            }
+        }
+        
+        auto end_time = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+        
+        INFO("Parsed " << parsed_count << " entries from " << lines.size() 
+             << " lines in " << duration.count() << "ms");
+        
+        // Should parse successfully
+        REQUIRE(parsed_count > 0);
+        REQUIRE(duration.count() < 5000); // Should complete within 5 seconds
+    }
+}

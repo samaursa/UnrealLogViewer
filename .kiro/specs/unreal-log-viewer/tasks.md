@@ -38,6 +38,7 @@
     - Write unit tests for Result class functionality
     - _Requirements: 8.4, 8.5_
 
+
 - [ ] 3. Implement log parsing engine
   - [ ] 3.1 Create basic LogParser class structure
     - Implement LogParser class using CK_GENERATED_BODY macro
@@ -46,9 +47,16 @@
     - Write unit tests for file loading and basic parsing setup
     - _Requirements: 1.1, 1.4, 6.6, 9.6_
 
+
+
+
   - [ ] 3.2 Implement entry type detection and parsing
     - Add DetectEntryType method to identify log entry formats
     - Implement ParseStructuredEntry, ParseSemiStructuredEntry, ParseUnstructuredEntry methods
+
+
+
+
     - Add extraction methods for timestamp, frame number, logger name, log level, and message
     - Write comprehensive unit tests for all parsing scenarios with real log examples
     - _Requirements: 1.1, 1.3, 1.4_

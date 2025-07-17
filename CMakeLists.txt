@@ -41,6 +41,7 @@ add_library(unreal_log_lib
   lib/log_parser/log_parser.h
   lib/log_parser/log_parser.cpp
   lib/filter_engine/filter.h
+  lib/filter_engine/filter.cpp
   lib/filter_engine/filter_engine.h
   lib/filter_engine/filter_engine.cpp
   lib/file_monitor/file_monitor.h
