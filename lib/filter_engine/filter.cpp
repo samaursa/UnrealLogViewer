@@ -287,4 +287,130 @@ namespace ue_log {
         }
     }
     
+    // Serialization methods
+    
+    std::string Filter::ToJson() const {
+        std::ostringstream oss;
+        oss << "{\n";
+        oss << "  \"name\": \"" << EscapeJsonString(name) << "\",\n";
+        oss << "  \"type\": " << static_cast<int>(type) << ",\n";
+        oss << "  \"criteria\": \"" << EscapeJsonString(criteria) << "\",\n";
+        oss << "  \"is_active\": " << (is_active ? "true" : "false") << ",\n";
+        oss << "  \"logic\": " << static_cast<int>(logic) << ",\n";
+        oss << "  \"highlight_color\": \"" << EscapeJsonString(highlight_color) << "\",\n";
+        oss << "  \"match_count\": " << match_count << ",\n";
+        oss << "  \"sub_filters\": [\n";
+        
+        for (size_t i = 0; i < sub_filters.size(); ++i) {
+            if (sub_filters[i]) {
+                oss << "    " << sub_filters[i]->ToJson();
+                if (i < sub_filters.size() - 1) {
+                    oss << ",";
+                }
+                oss << "\n";
+            }
+        }
+        
+        oss << "  ]\n";
+        oss << "}";
+        
+        return oss.str();
+    }
+    
+    std::unique_ptr<Filter> Filter::FromJson(const std::string& json_data) {
+        // Simple JSON parsing - in a real implementation, you'd use a proper JSON library
+        // For now, this is a basic implementation for testing purposes
+        
+        auto filter = std::make_unique<Filter>();
+        
+        // Extract name
+        size_t name_start = json_data.find("\"name\": \"") + 9;
+        size_t name_end = json_data.find("\"", name_start);
+        if (name_start != std::string::npos && name_end != std::string::npos) {
+            filter->name = UnescapeJsonString(json_data.substr(name_start, name_end - name_start));
+        }
+        
+        // Extract type
+        size_t type_start = json_data.find("\"type\": ") + 8;
+        size_t type_end = json_data.find(",", type_start);
+        if (type_start != std::string::npos && type_end != std::string::npos) {
+            int type_value = std::stoi(json_data.substr(type_start, type_end - type_start));
+            filter->type = static_cast<FilterType>(type_value);
+        }
+        
+        // Extract criteria
+        size_t criteria_start = json_data.find("\"criteria\": \"") + 13;
+        size_t criteria_end = json_data.find("\"", criteria_start);
+        if (criteria_start != std::string::npos && criteria_end != std::string::npos) {
+            filter->criteria = UnescapeJsonString(json_data.substr(criteria_start, criteria_end - criteria_start));
+        }
+        
+        // Extract is_active
+        size_t active_start = json_data.find("\"is_active\": ") + 13;
+        if (active_start != std::string::npos) {
+            filter->is_active = json_data.substr(active_start, 4) == "true";
+        }
+        
+        // Extract logic
+        size_t logic_start = json_data.find("\"logic\": ") + 9;
+        size_t logic_end = json_data.find(",", logic_start);
+        if (logic_start != std::string::npos && logic_end != std::string::npos) {
+            int logic_value = std::stoi(json_data.substr(logic_start, logic_end - logic_start));
+            filter->logic = static_cast<FilterLogic>(logic_value);
+        }
+        
+        // Extract highlight_color
+        size_t color_start = json_data.find("\"highlight_color\": \"") + 20;
+        size_t color_end = json_data.find("\"", color_start);
+        if (color_start != std::string::npos && color_end != std::string::npos) {
+            filter->highlight_color = UnescapeJsonString(json_data.substr(color_start, color_end - color_start));
+        }
+        
+        // Extract match_count
+        size_t count_start = json_data.find("\"match_count\": ") + 15;
+        size_t count_end = json_data.find(",", count_start);
+        if (count_start != std::string::npos && count_end != std::string::npos) {
+            filter->match_count = std::stoull(json_data.substr(count_start, count_end - count_start));
+        }
+        
+        // TODO: Parse sub_filters (would require more complex JSON parsing)
+        // For now, we'll skip sub-filter parsing in this basic implementation
+        
+        return filter;
+    }
+    
+    std::string Filter::EscapeJsonString(const std::string& str) const {
+        std::string escaped;
+        for (char c : str) {
+            switch (c) {
+                case '"': escaped += "\\\""; break;
+                case '\\': escaped += "\\\\"; break;
+                case '\n': escaped += "\\n"; break;
+                case '\r': escaped += "\\r"; break;
+                case '\t': escaped += "\\t"; break;
+                default: escaped += c; break;
+            }
+        }
+        return escaped;
+    }
+    
+    std::string Filter::UnescapeJsonString(const std::string& str) {
+        std::string unescaped;
+        for (size_t i = 0; i < str.length(); ++i) {
+            if (str[i] == '\\' && i + 1 < str.length()) {
+                switch (str[i + 1]) {
+                    case '"': unescaped += '"'; i++; break;
+                    case '\\': unescaped += '\\'; i++; break;
+                    case 'n': unescaped += '\n'; i++; break;
+                    case 'r': unescaped += '\r'; i++; break;
+                    case 't': unescaped += '\t'; i++; break;
+                    default: unescaped += str[i]; break;
+                }
+            } else {
+                unescaped += str[i];
+            }
+        }
+        return unescaped;
+    }
+    
 } // namespace ue_log

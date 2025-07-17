@@ -63,10 +63,17 @@ namespace ue_log {
         std::string GetStatisticsSummary() const;
         void SetAllFiltersActive(bool active);
         
+        // Filter persistence
+        Result SaveFiltersToFile(const std::string& filename) const;
+        Result LoadFiltersFromFile(const std::string& filename);
+        std::string SerializeFiltersToJson() const;
+        Result DeserializeFiltersFromJson(const std::string& json_data);
+        
     private:
         // Internal helper methods
         bool CompileAndCacheRegex(const std::string& pattern);
         void UpdateMatchCounts(const LogEntry& entry, const std::vector<const Filter*>& matching_filters);
+        size_t FindMatchingBrace(const std::string& json_data, size_t start_pos) const;
     };
     
 } // namespace ue_log

@@ -82,6 +82,15 @@ namespace ue_log {
         // Utility methods
         std::string ToString() const;
         
+        // Serialization
+        std::string ToJson() const;
+        static std::unique_ptr<Filter> FromJson(const std::string& json_data);
+        
+    private:
+        // JSON helper methods
+        std::string EscapeJsonString(const std::string& str) const;
+        static std::string UnescapeJsonString(const std::string& str);
+        
     private:
         // Internal matching methods for different filter types
         bool MatchesTextContains(const LogEntry& entry) const;

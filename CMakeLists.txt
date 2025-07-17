@@ -84,7 +84,11 @@ add_executable(unreal_log_tests
   tests/test_main.cpp
   tests/test_log_parser.cpp
   tests/test_filter_engine.cpp
+  tests/test_file_monitor.cpp
+  tests/test_integration.cpp
+  tests/test_simple_integration.cpp
   tests/test_result.cpp
+  tests/test_config_manager.cpp
 )
 
 # Link test application dependencies

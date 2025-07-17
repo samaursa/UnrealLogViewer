@@ -725,3 +725,168 @@ TEST_CASE("FilterEngine GetMatchingFilters works correctly", "[filter_engine]") 
         REQUIRE(matching.empty());
     }
 }
+
+TEST_CASE("Filter JSON serialization works correctly", "[filter]") {
+    SECTION("Basic filter serialization") {
+        Filter filter("TestFilter", FilterType::TextContains, "test message");
+        filter.Request_highlight_color("#FF0000");
+        filter.IncrementMatchCount();
+        filter.IncrementMatchCount();
+        
+        std::string json = filter.ToJson();
+        
+        REQUIRE(json.find("\"name\": \"TestFilter\"") != std::string::npos);
+        REQUIRE(json.find("\"type\": 0") != std::string::npos); // TextContains = 0
+        REQUIRE(json.find("\"criteria\": \"test message\"") != std::string::npos);
+        REQUIRE(json.find("\"is_active\": true") != std::string::npos);
+        REQUIRE(json.find("\"highlight_color\": \"#FF0000\"") != std::string::npos);
+        REQUIRE(json.find("\"match_count\": 2") != std::string::npos);
+    }
+    
+    SECTION("Filter deserialization") {
+        std::string json = R"({
+  "name": "DeserializedFilter",
+  "type": 2,
+  "criteria": "test.*pattern",
+  "is_active": false,
+  "logic": 1,
+  "highlight_color": "#00FF00",
+  "match_count": 5,
+  "sub_filters": []
+})";
+        
+        auto filter = Filter::FromJson(json);
+        REQUIRE(filter != nullptr);
+        REQUIRE(filter->Get_name() == "DeserializedFilter");
+        REQUIRE(filter->Get_type() == FilterType::TextRegex);
+        REQUIRE(filter->Get_criteria() == "test.*pattern");
+        REQUIRE(filter->Get_is_active() == false);
+        REQUIRE(filter->Get_logic() == FilterLogic::Or);
+        REQUIRE(filter->Get_highlight_color() == "#00FF00");
+        REQUIRE(filter->Get_match_count() == 5);
+    }
+    
+    SECTION("JSON string escaping") {
+        Filter filter("Test\"Filter", FilterType::TextContains, "message with \"quotes\" and \n newlines");
+        
+        std::string json = filter.ToJson();
+        
+        REQUIRE(json.find("Test\\\"Filter") != std::string::npos);
+        REQUIRE(json.find("\\\"quotes\\\"") != std::string::npos);
+        REQUIRE(json.find("\\n") != std::string::npos);
+    }
+}
+
+TEST_CASE("FilterEngine persistence works correctly", "[filter_engine]") {
+    FilterEngine engine;
+    
+    // Create test filters
+    auto filter1 = std::make_unique<Filter>("ErrorFilter", FilterType::TextContains, "error");
+    auto filter2 = std::make_unique<Filter>("RegexFilter", FilterType::TextRegex, "test.*pattern");
+    filter2->Request_highlight_color("#FF0000");
+    filter2->Request_is_active(false);
+    
+    engine.AddFilter(std::move(filter1));
+    engine.AddFilter(std::move(filter2));
+    
+    // Add some statistics
+    LogEntry test_entry("LogTemp", "This is an error message", "raw line");
+    std::vector<LogEntry> entries = {test_entry};
+    engine.ApplyFilters(entries);
+    
+    SECTION("JSON serialization") {
+        std::string json = engine.SerializeFiltersToJson();
+        
+        REQUIRE(json.find("\"version\": \"1.0\"") != std::string::npos);
+        REQUIRE(json.find("\"total_entries_processed\":") != std::string::npos);
+        REQUIRE(json.find("\"total_matches_found\":") != std::string::npos);
+        REQUIRE(json.find("\"filters\": [") != std::string::npos);
+        REQUIRE(json.find("ErrorFilter") != std::string::npos);
+        REQUIRE(json.find("RegexFilter") != std::string::npos);
+    }
+    
+    SECTION("Save and load filters to/from file") {
+        std::string filename = "test_filters.json";
+        
+        // Save filters
+        Result save_result = engine.SaveFiltersToFile(filename);
+        REQUIRE(save_result.IsSuccess());
+        
+        // Create a new engine and load filters
+        FilterEngine new_engine;
+        Result load_result = new_engine.LoadFiltersFromFile(filename);
+        REQUIRE(load_result.IsSuccess());
+        
+        // Verify filters were loaded correctly
+        REQUIRE(new_engine.GetFilterCount() == 2);
+        
+        Filter* loaded_error_filter = new_engine.FindFilter("ErrorFilter");
+        Filter* loaded_regex_filter = new_engine.FindFilter("RegexFilter");
+        
+        REQUIRE(loaded_error_filter != nullptr);
+        REQUIRE(loaded_regex_filter != nullptr);
+        
+        REQUIRE(loaded_error_filter->Get_type() == FilterType::TextContains);
+        REQUIRE(loaded_error_filter->Get_criteria() == "error");
+        REQUIRE(loaded_error_filter->Get_is_active() == true);
+        
+        REQUIRE(loaded_regex_filter->Get_type() == FilterType::TextRegex);
+        REQUIRE(loaded_regex_filter->Get_criteria() == "test.*pattern");
+        REQUIRE(loaded_regex_filter->Get_highlight_color() == "#FF0000");
+        REQUIRE(loaded_regex_filter->Get_is_active() == false);
+        
+        // Clean up test file
+        std::remove(filename.c_str());
+    }
+    
+    SECTION("JSON deserialization") {
+        std::string json = engine.SerializeFiltersToJson();
+        
+        FilterEngine new_engine;
+        Result result = new_engine.DeserializeFiltersFromJson(json);
+        REQUIRE(result.IsSuccess());
+        
+        REQUIRE(new_engine.GetFilterCount() == 2);
+        REQUIRE(new_engine.FindFilter("ErrorFilter") != nullptr);
+        REQUIRE(new_engine.FindFilter("RegexFilter") != nullptr);
+    }
+    
+    SECTION("Handle file errors") {
+        // Try to save to invalid path
+        Result save_result = engine.SaveFiltersToFile("/invalid/path/test.json");
+        REQUIRE(save_result.IsError());
+        REQUIRE(save_result.Get_error_message().find("Cannot open file") != std::string::npos);
+        
+        // Try to load non-existent file
+        Result load_result = engine.LoadFiltersFromFile("non_existent_file.json");
+        REQUIRE(load_result.IsError());
+        REQUIRE(load_result.Get_error_message().find("Cannot open file") != std::string::npos);
+    }
+    
+    SECTION("Handle invalid JSON") {
+        std::string invalid_json = "{ invalid json }";
+        
+        FilterEngine new_engine;
+        Result result = new_engine.DeserializeFiltersFromJson(invalid_json);
+        REQUIRE(result.IsError());
+    }
+    
+    SECTION("Debug JSON parsing") {
+        // Create a simple test with just one filter first
+        FilterEngine simple_engine;
+        auto simple_filter = std::make_unique<Filter>("SimpleFilter", FilterType::TextContains, "test");
+        simple_engine.AddFilter(std::move(simple_filter));
+        
+        std::string simple_json = simple_engine.SerializeFiltersToJson();
+        
+        FilterEngine load_engine;
+        Result result = load_engine.DeserializeFiltersFromJson(simple_json);
+        REQUIRE(result.IsSuccess());
+        REQUIRE(load_engine.GetFilterCount() == 1);
+        
+        Filter* loaded_filter = load_engine.FindFilter("SimpleFilter");
+        REQUIRE(loaded_filter != nullptr);
+        REQUIRE(loaded_filter->Get_name() == "SimpleFilter");
+        REQUIRE(loaded_filter->Get_criteria() == "test");
+    }
+}

@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <sstream>
 #include <iomanip>
+#include <fstream>
 
 namespace ue_log {
     
@@ -272,6 +273,151 @@ namespace ue_log {
         }
     }
     
+    // Filter persistence methods
+    
+    Result FilterEngine::SaveFiltersToFile(const std::string& filename) const {
+        try {
+            std::string json_data = SerializeFiltersToJson();
+            
+            std::ofstream file(filename);
+            if (!file.is_open()) {
+                return Result::Error(ErrorCode::FileNotFound, 
+                    "Cannot open file for writing: " + filename);
+            }
+            
+            file << json_data;
+            file.close();
+            
+            if (file.fail()) {
+                return Result::Error(ErrorCode::FileNotFound, 
+                    "Failed to write to file: " + filename);
+            }
+            
+            return Result::Success();
+        } catch (const std::exception& e) {
+            return Result::Error(ErrorCode::FileNotFound, 
+                "Exception while saving filters: " + std::string(e.what()));
+        }
+    }
+    
+    Result FilterEngine::LoadFiltersFromFile(const std::string& filename) {
+        try {
+            std::ifstream file(filename);
+            if (!file.is_open()) {
+                return Result::Error(ErrorCode::FileNotFound, 
+                    "Cannot open file for reading: " + filename);
+            }
+            
+            std::string json_data((std::istreambuf_iterator<char>(file)),
+                                  std::istreambuf_iterator<char>());
+            file.close();
+            
+            return DeserializeFiltersFromJson(json_data);
+        } catch (const std::exception& e) {
+            return Result::Error(ErrorCode::FileNotFound, 
+                "Exception while loading filters: " + std::string(e.what()));
+        }
+    }
+    
+    std::string FilterEngine::SerializeFiltersToJson() const {
+        std::ostringstream oss;
+        oss << "{\n";
+        oss << "  \"version\": \"1.0\",\n";
+        oss << "  \"total_entries_processed\": " << total_entries_processed << ",\n";
+        oss << "  \"total_matches_found\": " << total_matches_found << ",\n";
+        oss << "  \"filters\": [\n";
+        
+        for (size_t i = 0; i < primary_filters.size(); ++i) {
+            if (primary_filters[i]) {
+                oss << "    " << primary_filters[i]->ToJson();
+                if (i < primary_filters.size() - 1) {
+                    oss << ",";
+                }
+                oss << "\n";
+            }
+        }
+        
+        oss << "  ]\n";
+        oss << "}";
+        
+        return oss.str();
+    }
+    
+    Result FilterEngine::DeserializeFiltersFromJson(const std::string& json_data) {
+        try {
+            // Clear existing filters
+            ClearAllFilters();
+            
+            // Extract version (for future compatibility)
+            size_t version_start = json_data.find("\"version\": \"") + 12;
+            size_t version_end = json_data.find("\"", version_start);
+            std::string version;
+            if (version_start != std::string::npos && version_end != std::string::npos) {
+                version = json_data.substr(version_start, version_end - version_start);
+            }
+            
+            // Extract statistics
+            size_t processed_start = json_data.find("\"total_entries_processed\": ") + 27;
+            size_t processed_end = json_data.find(",", processed_start);
+            if (processed_start != std::string::npos && processed_end != std::string::npos) {
+                total_entries_processed = std::stoull(json_data.substr(processed_start, processed_end - processed_start));
+            }
+            
+            size_t matches_start = json_data.find("\"total_matches_found\": ") + 23;
+            size_t matches_end = json_data.find(",", matches_start);
+            if (matches_start != std::string::npos && matches_end != std::string::npos) {
+                total_matches_found = std::stoull(json_data.substr(matches_start, matches_end - matches_start));
+            }
+            
+            // Extract filters array
+            size_t filters_start = json_data.find("\"filters\": [");
+            if (filters_start == std::string::npos) {
+                return Result::Error(ErrorCode::InvalidLogFormat, "No filters array found in JSON");
+            }
+            
+            // Find and parse each filter object in the array
+            size_t search_pos = filters_start;
+            
+            while (search_pos < json_data.length()) {
+                // Find the next opening brace for a filter object
+                size_t filter_start = json_data.find('{', search_pos);
+                if (filter_start == std::string::npos) {
+                    break; // No more filter objects
+                }
+                
+                // Find the matching closing brace
+                size_t filter_end = FindMatchingBrace(json_data, filter_start);
+                if (filter_end == std::string::npos) {
+                    break; // Malformed JSON
+                }
+                
+                // Extract the filter JSON and parse it
+                std::string filter_json = json_data.substr(filter_start, filter_end - filter_start + 1);
+                auto filter = Filter::FromJson(filter_json);
+                if (filter && filter->IsValid()) {
+                    Result add_result = AddFilter(std::move(filter));
+                    if (add_result.IsError()) {
+                        return add_result;
+                    }
+                }
+                
+                // Move search position past this filter
+                search_pos = filter_end + 1;
+                
+                // Check if we've reached the end of the filters array
+                size_t next_brace = json_data.find(']', search_pos);
+                if (next_brace != std::string::npos && next_brace < json_data.find('{', search_pos)) {
+                    break; // End of filters array
+                }
+            }
+            
+            return Result::Success();
+        } catch (const std::exception& e) {
+            return Result::Error(ErrorCode::InvalidLogFormat, 
+                "Exception while deserializing filters: " + std::string(e.what()));
+        }
+    }
+    
     // Private helper methods
     
     bool FilterEngine::CompileAndCacheRegex(const std::string& pattern) {
@@ -289,6 +435,39 @@ namespace ue_log {
         for (const Filter* filter : matching_filters) {
             const_cast<Filter*>(filter)->IncrementMatchCount();
         }
+    }
+    
+    size_t FilterEngine::FindMatchingBrace(const std::string& json_data, size_t start_pos) const {
+        if (start_pos >= json_data.length() || json_data[start_pos] != '{') {
+            return std::string::npos;
+        }
+        
+        int brace_count = 0;
+        bool in_string = false;
+        bool escape_next = false;
+        
+        for (size_t i = start_pos; i < json_data.length(); ++i) {
+            char c = json_data[i];
+            
+            if (escape_next) {
+                escape_next = false;
+            } else if (c == '\\') {
+                escape_next = true;
+            } else if (c == '"' && !escape_next) {
+                in_string = !in_string;
+            } else if (!in_string) {
+                if (c == '{') {
+                    brace_count++;
+                } else if (c == '}') {
+                    brace_count--;
+                    if (brace_count == 0) {
+                        return i;
+                    }
+                }
+            }
+        }
+        
+        return std::string::npos;
     }
     
 } // namespace ue_log
