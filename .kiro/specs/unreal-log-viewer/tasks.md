@@ -162,7 +162,9 @@
     - Add support for different terminal color capabilities
     - _Requirements: 1.1, 1.2, 4.1, 4.2, 4.4, 6.1_
 
-  - [-] 7.3 Add navigation and keyboard controls
+  - [x] 7.3 Add navigation and keyboard controls
+
+
 
     - Implement keyboard navigation (arrows, page up/down, home/end)
     - Add quick search functionality with real-time highlighting
@@ -171,19 +173,31 @@
     - _Requirements: 7.2, 7.3, 5.6_
 
 - [ ] 8. Create filter management UI
-  - [ ] 8.1 Implement FilterPanel class
+  - [x] 8.1 Implement FilterPanel class
+
+
+
+
     - Create FilterPanel using CK_GENERATED_BODY macro
     - Build hierarchical filter tree view display
     - Add individual toggle controls for each filter
     - Implement filter selection and navigation
     - _Requirements: 5.1, 5.2, 5.3_
 
-  - [ ] 8.2 Add filter editing and management
-    - Implement in-place filter editing functionality
-    - Add filter creation, deletion, and modification
-    - Create filter statistics display with match counts
-    - Add keyboard shortcuts for filter operations
-    - _Requirements: 5.4, 5.5, 5.6_
+  - [x] 8.2 Add hierarchical filter system and contextual filtering
+
+
+
+
+    - Implement hierarchical filter expression builder with AND/OR logic support
+    - Add quick search to complex filter promotion workflow (/ → + to promote)
+    - Create contextual filter creation from current log line (C key)
+    - Implement context lines around filtered results with {/} controls (±0 to ±10 lines)
+    - Add filter condition builder dialog with field/operator/value selection
+    - Create visual distinction between match lines and context lines (muted colors)
+    - Add smart context handling for overlapping matches and gaps
+    - Implement filter expression tree navigation and editing
+    - _Requirements: 5.4, 5.5, 5.6, plus new hierarchical filtering requirements_
 
 - [ ] 9. Integrate real-time functionality
   - [ ] 9.1 Connect file monitoring to UI updates

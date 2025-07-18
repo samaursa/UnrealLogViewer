@@ -44,6 +44,8 @@ add_library(unreal_log_lib
   lib/filter_engine/filter.cpp
   lib/filter_engine/filter_engine.h
   lib/filter_engine/filter_engine.cpp
+  lib/filter_engine/filter_expression.h
+  lib/filter_engine/filter_expression.cpp
   lib/file_monitor/file_monitor.h
   lib/file_monitor/file_monitor.cpp
   lib/config/config_manager.h
@@ -51,6 +53,8 @@ add_library(unreal_log_lib
   lib/ui/component.h
   lib/ui/main_window.h
   lib/ui/main_window.cpp
+  lib/ui/filter_panel.h
+  lib/ui/filter_panel.cpp
 )
 
 # Set library properties

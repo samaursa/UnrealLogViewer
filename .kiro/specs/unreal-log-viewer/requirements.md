@@ -123,3 +123,15 @@ The Unreal Engine Log Viewer is an enhanced FTXUI-based terminal application des
 8. WHEN writing unit tests THEN the system SHALL use the Catch2 testing library for comprehensive test coverage
 9. WHEN organizing the project structure THEN the system SHALL separate the logger functionality into a reusable library, the main application as a separate executable, and the testing suite as another executable
 10. WHEN building the project THEN the CMakeLists.txt file SHALL support multiple applications (main app, test app) and the logger library
+
+### Requirement 10: Development and Testing Protocol
+
+**User Story:** As a developer working on the Unreal Engine Log Viewer, I want a clear testing protocol for GUI functionality, so that I can ensure features work correctly in the terminal environment.
+
+#### Acceptance Criteria
+
+1. WHEN implementing GUI features THEN the developer SHALL ask the user to test the application since GUI testing cannot be automated in this environment
+2. WHEN requesting user testing THEN the developer SHALL provide a concise test plan with specific steps to verify functionality
+3. WHEN building the application THEN the developer SHALL ensure it compiles successfully before requesting user testing
+4. WHEN testing focus management THEN the user SHALL verify that Tab key properly switches focus between main window and filter panel
+5. WHEN testing keyboard navigation THEN the user SHALL verify that arrow keys work correctly in both focused components

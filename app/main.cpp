@@ -50,6 +50,9 @@ int main(int argc, char* argv[]) {
         // Create the FTXUI component
         auto component = main_window->CreateFTXUIComponent();
         
+        // Load sample data for testing
+        main_window->LoadLogFile("sample.log");
+        
         // Run the UI loop
         std::cout << "Starting UI loop..." << std::endl;
         screen.Loop(component);

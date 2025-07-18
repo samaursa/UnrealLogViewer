@@ -1,8 +1,10 @@
 #pragma once
 
 #include "component.h"
+#include "filter_panel.h"
 #include "../log_parser/log_parser.h"
 #include "../filter_engine/filter_engine.h"
+#include "../filter_engine/filter_expression.h"
 #include "../file_monitor/file_monitor.h"
 #include "../config/config_manager.h"
 #include <memory>
@@ -11,6 +13,7 @@
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/dom/elements.hpp>
+#include <set>
 
 namespace ue_log {
 
@@ -127,6 +130,12 @@ public:
     std::string GetLastError() const { return last_error_; }
     
     /**
+     * Set the last error message (for status bar display).
+     * @param error The error message to display.
+     */
+    void SetLastError(const std::string& error) { last_error_ = error; }
+    
+    /**
      * Set the exit callback function.
      * @param callback Function to call when the application should exit.
      */
@@ -146,6 +155,54 @@ public:
     void PageDown();
     void ScrollToTop();
     void ScrollToBottom();
+    
+    // Search functionality
+    void ShowSearch();
+    void HideSearch();
+    void PerformSearch(const std::string& query);
+    void FindNext();
+    void FindPrevious();
+    void ClearSearch();
+    void PromoteSearchToFilter();
+    void ShowSearchPromotionDialog();
+    void HideSearchPromotionDialog();
+    
+    // Search input handling
+    void AppendToSearch(const std::string& text);
+    void ConfirmSearch();
+    void BackspaceSearch();
+    
+    // Contextual filtering
+    void ShowContextualFilterDialog();
+    void HideContextualFilterDialog();
+    void CreateContextualFilter(FilterConditionType type);
+    bool IsContextualFilterDialogActive() const { return show_contextual_filter_dialog_; }
+    
+    // Search promotion dialog
+    bool IsSearchPromotionDialogActive() const { return show_search_promotion_; }
+    void CreateFilterFromSearch(FilterConditionType type);
+    
+    // Search state checking
+    bool IsSearchActive() const { return show_search_; }
+    bool IsSearchInputMode() const { return search_input_mode_; }
+    
+    // Context lines functionality
+    void IncreaseContext();
+    void DecreaseContext();
+    void SetContextLines(int lines);
+    void ClearContext();
+    
+    // Jump functionality
+    void ShowJumpDialog();
+    void HideJumpDialog();
+    void JumpToLine(int line_number);
+    void JumpToTimestamp(const std::string& timestamp);
+    void ToggleJumpMode(); // Switch between line/timestamp mode
+    
+    // Filter panel functionality
+    void ToggleFilterPanel();
+    FilterPanel* GetFilterPanel() { return filter_panel_.get(); }
+    bool IsFilterPanelVisible() const { return show_filter_panel_; }
 
 private:
     // FTXUI component
@@ -155,6 +212,9 @@ private:
     std::unique_ptr<LogParser> log_parser_;
     std::unique_ptr<FilterEngine> filter_engine_;
     std::unique_ptr<FileMonitor> file_monitor_;
+    
+    // UI components
+    std::unique_ptr<FilterPanel> filter_panel_;
     
     ConfigManager* config_manager_ = nullptr;
     bool owns_config_manager_ = false;
@@ -172,8 +232,33 @@ private:
     // UI state
     bool show_help_ = false;
     bool show_filter_panel_ = true;
+    bool show_search_ = false;
+    bool show_jump_dialog_ = false;
     int window_width_ = 0;
     int window_height_ = 0;
+    
+    // Search state
+    std::string search_query_;
+    int search_result_index_ = -1;
+    std::vector<int> search_results_;
+    bool show_search_promotion_ = false;
+    bool search_input_mode_ = false; // true when typing search, false when navigating results
+    
+    // Context lines state
+    int context_lines_ = 0; // Number of context lines to show around matches
+    std::vector<LogEntry> context_entries_; // Filtered entries with context
+    std::set<size_t> match_line_numbers_; // Line numbers that are actual matches (not context)
+    
+    // Contextual filter state
+    bool show_contextual_filter_dialog_ = false;
+    std::vector<std::unique_ptr<FilterCondition>> contextual_conditions_;
+    
+    // Hierarchical filter state
+    std::unique_ptr<FilterExpression> current_filter_expression_;
+    
+    // Jump dialog state
+    std::string jump_input_;
+    bool jump_to_line_mode_ = true; // true for line, false for timestamp
     
     // Callbacks
     std::function<void()> exit_callback_;
@@ -203,6 +288,12 @@ private:
     
     // Sample data creation for testing
     void CreateSampleLogEntries();
+    void CreateSampleFilters();
+    
+    // Filter application helpers
+    void ApplyCurrentFilter();
+    void ApplyTraditionalFilters();
+    void BuildContextEntries(const std::vector<LogEntry>& matches);
 };
 
 } // namespace ue_log
