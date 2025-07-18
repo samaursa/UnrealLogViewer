@@ -139,7 +139,11 @@
     - _Requirements: 8.4, 8.5_
 
 - [ ] 7. Build FTXUI user interface components
-  - [-] 7.1 Create MainWindow class structure
+  - [x] 7.1 Create MainWindow class structure
+
+
+
+
 
     - Implement MainWindow using CK_GENERATED_BODY macro
     - Set up basic FTXUI component structure and layout
@@ -147,14 +151,19 @@
     - Create basic rendering framework with status bar
     - _Requirements: 6.1, 7.1_
 
-  - [ ] 7.2 Implement log table display with highlighting
+  - [x] 7.2 Implement log table display with highlighting
+
+
+
+
     - Create RenderLogTable method with column-based display
     - Add visual highlighting system with color coding
     - Implement virtual scrolling for performance with large datasets
     - Add support for different terminal color capabilities
     - _Requirements: 1.1, 1.2, 4.1, 4.2, 4.4, 6.1_
 
-  - [ ] 7.3 Add navigation and keyboard controls
+  - [-] 7.3 Add navigation and keyboard controls
+
     - Implement keyboard navigation (arrows, page up/down, home/end)
     - Add quick search functionality with real-time highlighting
     - Create jump-to-line and jump-to-timestamp features

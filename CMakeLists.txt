@@ -48,6 +48,9 @@ add_library(unreal_log_lib
   lib/file_monitor/file_monitor.cpp
   lib/config/config_manager.h
   lib/config/config_manager.cpp
+  lib/ui/component.h
+  lib/ui/main_window.h
+  lib/ui/main_window.cpp
 )
 
 # Set library properties
@@ -60,15 +63,14 @@ target_include_directories(unreal_log_lib PUBLIC
 target_link_libraries(unreal_log_lib
   PUBLIC mio::mio
   PUBLIC Threads::Threads
+  PUBLIC ftxui::screen
+  PUBLIC ftxui::dom
+  PUBLIC ftxui::component
 )
 
 # Create the main application executable
 add_executable(unreal_log_viewer
   app/main.cpp
-  app/ui/main_window.h
-  app/ui/main_window.cpp
-  app/ui/filter_panel.h
-  app/ui/filter_panel.cpp
 )
 
 # Link main application dependencies
@@ -89,12 +91,16 @@ add_executable(unreal_log_tests
   tests/test_simple_integration.cpp
   tests/test_result.cpp
   tests/test_config_manager.cpp
+  tests/test_main_window.cpp
 )
 
 # Link test application dependencies
 target_link_libraries(unreal_log_tests
   PRIVATE unreal_log_lib
   PRIVATE Catch2::Catch2WithMain
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
 )
 
 # Compiler-specific options for all targets
