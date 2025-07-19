@@ -396,6 +396,9 @@ namespace ue_log {
         std::vector<std::string> lines = SplitIntoLines(start_offset);
         size_t line_number = current_line_number;
         
+        // Pre-allocate memory for entries to avoid reallocations
+        entries.reserve(lines.size());
+        
         for (const std::string& line : lines) {
             if (IsValidLogLine(line)) {
                 LogEntry entry = ParseSingleEntry(line, line_number);
@@ -405,6 +408,7 @@ namespace ue_log {
         }
         
         // Update parsed entries
+        parsed_entries.reserve(parsed_entries.size() + entries.size());
         parsed_entries.insert(parsed_entries.end(), entries.begin(), entries.end());
         current_line_number = line_number;
         
@@ -430,30 +434,41 @@ namespace ue_log {
             return lines;
         }
         
-        std::string current_line;
+        // Pre-allocate memory for better performance
+        // Estimate lines based on average line length (assume ~100 chars per line)
+        size_t estimated_lines = (size - start_offset) / 100;
+        if (max_lines > 0) {
+            estimated_lines = std::min(estimated_lines, max_lines);
+        }
+        lines.reserve(estimated_lines);
+        
+        // Use more efficient line splitting with string_view-like approach
+        const char* line_start = data + start_offset;
+        const char* current = line_start;
+        const char* end = data + size;
         size_t lines_read = 0;
         
-        for (size_t i = start_offset; i < size; ++i) {
-            char c = data[i];
-            
-            if (c == '\n') {
-                if (!current_line.empty()) {
-                    lines.push_back(current_line);
-                    lines_read++;
-                    
-                    if (max_lines > 0 && lines_read >= max_lines) {
-                        break;
-                    }
-                }
-                current_line.clear();
-            } else if (c != '\r') {  // Skip carriage return
-                current_line += c;
+        while (current < end && (max_lines == 0 || lines_read < max_lines)) {
+            // Find end of line
+            const char* line_end = current;
+            while (line_end < end && *line_end != '\n' && *line_end != '\r') {
+                ++line_end;
             }
-        }
-        
-        // Add the last line if it doesn't end with newline and we haven't reached max_lines
-        if (!current_line.empty() && (max_lines == 0 || lines_read < max_lines)) {
-            lines.push_back(current_line);
+            
+            // Create line if not empty
+            if (line_end > current) {
+                lines.emplace_back(current, line_end - current);
+                lines_read++;
+            }
+            
+            // Skip line ending characters
+            current = line_end;
+            if (current < end && *current == '\r') {
+                ++current;
+            }
+            if (current < end && *current == '\n') {
+                ++current;
+            }
         }
         
         return lines;

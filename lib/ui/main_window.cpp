@@ -376,25 +376,53 @@ bool MainWindow::LoadLogFile(const std::string& file_path) {
         return false;
     }
     
+    // Check if file exists
+    if (!std::filesystem::exists(file_path)) {
+        last_error_ = "File does not exist: " + file_path;
+        return false;
+    }
+    
     // Store the file path
     current_file_path_ = file_path;
     
-    // Create some sample log entries for testing the display
-    log_entries_.clear();
-    CreateSampleLogEntries();
-    
-    // Create some sample filters for testing navigation
-    CreateSampleFilters();
-    
-    // Apply filters (for now just copy all entries)
-    OnFiltersChanged();
-    
-    // Reset scroll position and selection
-    scroll_offset_ = 0;
-    selected_entry_index_ = 0;
-    
-    last_error_.clear();
-    return true;
+    try {
+        // Use LogParser to load and parse the real file
+        auto load_result = log_parser_->LoadFile(file_path);
+        if (load_result.IsError()) {
+            last_error_ = "Failed to load file: " + file_path + " - " + load_result.Get_error_message();
+            return false;
+        }
+        
+        // Show loading message
+        last_error_ = "Loading and parsing log file...";
+        
+        // Parse the log entries
+        log_entries_ = log_parser_->ParseEntries();
+        
+        if (log_entries_.empty()) {
+            // If no entries were parsed, create sample data as fallback
+            CreateSampleLogEntries();
+            last_error_ = "No valid log entries found in file, using sample data";
+        } else {
+            last_error_ = "Loaded " + std::to_string(log_entries_.size()) + " log entries from " + std::filesystem::path(file_path).filename().string();
+        }
+        
+        // Create some sample filters for testing navigation
+        CreateSampleFilters();
+        
+        // Apply filters
+        OnFiltersChanged();
+        
+        // Reset scroll position and selection
+        scroll_offset_ = 0;
+        selected_entry_index_ = 0;
+        
+        return true;
+        
+    } catch (const std::exception& e) {
+        last_error_ = "Error loading file: " + std::string(e.what());
+        return false;
+    }
 }
 
 bool MainWindow::ReloadLogFile() {
