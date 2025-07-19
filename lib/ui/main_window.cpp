@@ -703,8 +703,13 @@ void MainWindow::OnNewLogLines(const std::vector<std::string>& new_lines) {
 }
 
 void MainWindow::OnFiltersChanged() {
-    // Apply the traditional filters from FilterEngine
-    ApplyTraditionalFilters();
+    // Check if we have hierarchical filters (contextual filters) and apply those
+    if (current_filter_expression_ && !current_filter_expression_->IsEmpty()) {
+        ApplyCurrentFilter();
+    } else {
+        // Fall back to traditional filters from FilterEngine
+        ApplyTraditionalFilters();
+    }
 }
 
 void MainWindow::ApplyTraditionalFilters() {

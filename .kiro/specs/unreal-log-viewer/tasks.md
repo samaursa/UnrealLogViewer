@@ -189,6 +189,14 @@
 
 
 
+
+
+
+
+
+
+
+
     - Implement hierarchical filter expression builder with AND/OR logic support
     - Add quick search to complex filter promotion workflow (/ → + to promote)
     - Create contextual filter creation from current log line (C key)

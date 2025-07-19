@@ -127,6 +127,23 @@ const Filter* FilterPanel::GetSelectedFilter() const {
 }
 
 void FilterPanel::ToggleSelectedFilter() {
+    // Handle hierarchical filters (contextual filters)
+    if (current_filter_expression_ && !current_filter_expression_->IsEmpty()) {
+        const auto& conditions = current_filter_expression_->GetConditions();
+        if (selected_filter_index_ >= 0 && selected_filter_index_ < static_cast<int>(conditions.size())) {
+            // Toggle the selected condition
+            auto* condition = conditions[selected_filter_index_].get();
+            condition->Request_is_active_(!condition->Get_is_active_());
+            
+            // Trigger filter update
+            if (filters_changed_callback_) {
+                filters_changed_callback_();
+            }
+        }
+        return;
+    }
+    
+    // Handle traditional filters
     const Filter* filter = GetSelectedFilter();
     if (!filter || !filter_engine_) {
         return;
@@ -148,6 +165,22 @@ void FilterPanel::ToggleSelectedFilter() {
 }
 
 void FilterPanel::NavigateUp() {
+    // Handle hierarchical filters (contextual filters)
+    if (current_filter_expression_ && !current_filter_expression_->IsEmpty()) {
+        const auto& conditions = current_filter_expression_->GetConditions();
+        if (conditions.empty()) {
+            return;
+        }
+        
+        int new_index = selected_filter_index_ - 1;
+        if (new_index < 0) {
+            new_index = static_cast<int>(conditions.size()) - 1;
+        }
+        selected_filter_index_ = new_index;
+        return;
+    }
+    
+    // Handle traditional filters
     if (display_items_.empty()) {
         return;
     }
@@ -160,6 +193,22 @@ void FilterPanel::NavigateUp() {
 }
 
 void FilterPanel::NavigateDown() {
+    // Handle hierarchical filters (contextual filters)
+    if (current_filter_expression_ && !current_filter_expression_->IsEmpty()) {
+        const auto& conditions = current_filter_expression_->GetConditions();
+        if (conditions.empty()) {
+            return;
+        }
+        
+        int new_index = selected_filter_index_ + 1;
+        if (new_index >= static_cast<int>(conditions.size())) {
+            new_index = 0;
+        }
+        selected_filter_index_ = new_index;
+        return;
+    }
+    
+    // Handle traditional filters
     if (display_items_.empty()) {
         return;
     }
@@ -206,18 +255,39 @@ void FilterPanel::BuildDisplayItemsRecursive(const Filter* filter, int depth, bo
 }
 
 ftxui::Element FilterPanel::RenderFilterTree() const {
-    // If we have a current filter expression, show it
+    // Show hierarchical filter expression if it has conditions (contextual filters)
     if (current_filter_expression_ && !current_filter_expression_->IsEmpty()) {
         std::vector<Element> rows;
         
         // Show the current filter expression
         rows.push_back(text("Current Filter:") | bold);
         
-        // Show each condition on a separate line for better readability
+        // Show each condition on a separate line with checkboxes and selection
         const auto& conditions = current_filter_expression_->GetConditions();
         for (size_t i = 0; i < conditions.size(); ++i) {
-            std::string condition_text = std::to_string(i + 1) + ". " + conditions[i]->ToString();
-            rows.push_back(text(condition_text) | color(Color::Green));
+            // Create checkbox indicator
+            std::string checkbox = conditions[i]->Get_is_active_() ? "[✓]" : "[ ]";
+            
+            // Create condition text
+            std::string condition_text = checkbox + " " + std::to_string(i + 1) + ". " + conditions[i]->ToString();
+            
+            // Create the row element
+            Element row = text(condition_text);
+            
+            // Apply selection highlighting
+            bool is_selected = (static_cast<int>(i) == selected_filter_index_);
+            if (is_selected) {
+                row = row | inverted;
+            }
+            
+            // Apply color based on active state
+            if (conditions[i]->Get_is_active_()) {
+                row = row | color(Color::Green);
+            } else {
+                row = row | dim;
+            }
+            
+            rows.push_back(row);
         }
         
         if (conditions.empty()) {
@@ -238,24 +308,25 @@ ftxui::Element FilterPanel::RenderFilterTree() const {
         return vbox(rows);
     }
     
-    // Fall back to old filter display if no current expression
-    if (display_items_.empty()) {
-        return vbox({
-            text("No filters defined") | center,
-            text("Press 'C' on a log entry to create contextual filters") | center | dim,
-            text("") | flex
-        });
+    // Fall back to traditional filters if no hierarchical filters
+    if (!display_items_.empty()) {
+        std::vector<Element> rows;
+        
+        for (size_t i = 0; i < display_items_.size(); ++i) {
+            bool is_selected = (static_cast<int>(i) == selected_filter_index_);
+            Element row = RenderFilterItem(display_items_[i], is_selected);
+            rows.push_back(row);
+        }
+        
+        return vbox(rows);
     }
     
-    std::vector<Element> rows;
-    
-    for (size_t i = 0; i < display_items_.size(); ++i) {
-        bool is_selected = (static_cast<int>(i) == selected_filter_index_);
-        Element row = RenderFilterItem(display_items_[i], is_selected);
-        rows.push_back(row);
-    }
-    
-    return vbox(rows);
+    // Show empty state if no filters at all
+    return vbox({
+        text("No filters defined") | center,
+        text("Press 'C' on a log entry to create contextual filters") | center | dim,
+        text("") | flex
+    });
 }
 
 ftxui::Element FilterPanel::RenderFilterItem(const FilterDisplayItem& item, bool is_selected) const {
