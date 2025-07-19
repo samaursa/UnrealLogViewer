@@ -290,6 +290,12 @@ private:
     void CreateSampleLogEntries();
     void CreateSampleFilters();
     
+    // Helper methods
+    bool HasUppercaseLetters(const std::string& text) const;
+    
+    // Enhanced status bar rendering
+    ftxui::Element RenderSearchStatusBar() const;
+    
     // Filter application helpers
     void ApplyCurrentFilter();
     void ApplyTraditionalFilters();

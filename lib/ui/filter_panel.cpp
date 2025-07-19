@@ -75,11 +75,22 @@ ftxui::Element FilterPanel::Render() const {
     Element content = RenderFilterTree();
     Element controls = RenderFilterControls();
     
-    return window(text(GetTitle()), vbox({
+    Element window_element = window(text(GetTitle()), vbox({
         content | flex,
         separator(),
         controls
     }));
+    
+    // Add visual focus indicator
+    if (is_focused_) {
+        // Filter panel has focus - add bright border
+        window_element = window_element | border;
+    } else {
+        // Filter panel doesn't have focus - add dim border
+        window_element = window_element | border | dim;
+    }
+    
+    return window_element;
 }
 
 ftxui::Component FilterPanel::CreateFTXUIComponent() {
@@ -227,6 +238,47 @@ void FilterPanel::ToggleExpansion() {
     
     // For now, this is a placeholder since we don't have hierarchical filters yet
     // In the future, this would expand/collapse filter groups
+}
+
+void FilterPanel::DeleteSelectedFilter() {
+    // Handle hierarchical filters (contextual filters)
+    if (current_filter_expression_ && !current_filter_expression_->IsEmpty()) {
+        const auto& conditions = current_filter_expression_->GetConditions();
+        if (selected_filter_index_ >= 0 && selected_filter_index_ < static_cast<int>(conditions.size())) {
+            // Remove the selected condition
+            const_cast<FilterExpression*>(current_filter_expression_)->RemoveCondition(selected_filter_index_);
+            
+            // Adjust selection if needed
+            if (selected_filter_index_ >= static_cast<int>(current_filter_expression_->GetConditions().size())) {
+                selected_filter_index_ = static_cast<int>(current_filter_expression_->GetConditions().size()) - 1;
+            }
+            
+            // Trigger filter update
+            if (filters_changed_callback_) {
+                filters_changed_callback_();
+            }
+        }
+        return;
+    }
+    
+    // Handle traditional filters
+    const Filter* filter = GetSelectedFilter();
+    if (!filter || !filter_engine_) {
+        return;
+    }
+    
+    // Find and remove the filter from the engine
+    const auto& filters = filter_engine_->Get_primary_filters();
+    for (size_t i = 0; i < filters.size(); ++i) {
+        if (filters[i].get() == filter) {
+            filter_engine_->RemoveFilter(filter->Get_name());
+            RefreshFilters();
+            if (filters_changed_callback_) {
+                filters_changed_callback_();
+            }
+            break;
+        }
+    }
 }
 
 void FilterPanel::BuildDisplayItems() {

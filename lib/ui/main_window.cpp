@@ -202,6 +202,10 @@ public:
                 } else {
                     // Main window is focused, focus filter panel
                     parent_->GetFilterPanel()->SetFocus(true);
+                    // Auto-select first filter if none selected
+                    if (parent_->GetFilterPanel()->GetSelectedFilterIndex() < 0) {
+                        parent_->GetFilterPanel()->SetSelectedFilterIndex(0);
+                    }
                     parent_->SetLastError("Filter panel focused - use arrow keys to navigate filters, Space to toggle");
                 }
                 return true;
@@ -228,6 +232,14 @@ public:
         if (event == Event::Character(' ')) {
             if (parent_->GetFilterPanel() && parent_->GetFilterPanel()->IsFocused()) {
                 parent_->GetFilterPanel()->ToggleSelectedFilter();
+                return true;
+            }
+        }
+        
+        // Handle Delete key and vim-style 'x' for removing filters when filter panel has focus
+        if (event == Event::Delete || event == Event::Character('x')) {
+            if (parent_->GetFilterPanel() && parent_->GetFilterPanel()->IsFocused()) {
+                parent_->GetFilterPanel()->DeleteSelectedFilter();
                 return true;
             }
         }
@@ -327,6 +339,11 @@ ftxui::Element MainWindow::Render() const {
     // Add log table (takes most of the space)
     main_elements.push_back(RenderLogTable() | flex);
     
+    // Add search status bar if active (appears above main status bar)
+    if (show_search_ || show_contextual_filter_dialog_) {
+        main_elements.push_back(RenderSearchStatusBar());
+    }
+    
     // Add status bar at the bottom
     main_elements.push_back(RenderStatusBar());
     
@@ -335,7 +352,7 @@ ftxui::Element MainWindow::Render() const {
     
     // Add filter panel if enabled (on the left side)
     if (show_filter_panel_ && filter_panel_) {
-        Element filter_panel = filter_panel_->Render() | size(WIDTH, EQUAL, 30);
+        Element filter_panel = filter_panel_->Render() | size(WIDTH, EQUAL, 60);
         main_content = hbox({
             filter_panel,
             separator(),
@@ -488,7 +505,19 @@ ftxui::Element MainWindow::RenderLogTable() const {
         }
     }
     
-    return window(text(GetTitle()), vbox(rows));
+    // Add visual focus indicator - main window has focus when filter panel doesn't
+    bool main_has_focus = !filter_panel_ || !filter_panel_->IsFocused();
+    Element window_element = window(text(GetTitle()), vbox(rows));
+    
+    if (main_has_focus) {
+        // Main window has focus - add bright border
+        window_element = window_element | border;
+    } else {
+        // Main window doesn't have focus - add dim border
+        window_element = window_element | border | dim;
+    }
+    
+    return window_element;
 }
 
 ftxui::Element MainWindow::RenderStatusBar() const {
@@ -798,6 +827,9 @@ void MainWindow::PerformSearch(const std::string& query) {
         return;
     }
     
+    // Smart case sensitivity: case-sensitive if query contains uppercase, case-insensitive if all lowercase
+    bool case_sensitive = HasUppercaseLetters(query);
+    
     // Search through filtered entries
     for (int i = 0; i < static_cast<int>(filtered_entries_.size()); ++i) {
         const auto& entry = filtered_entries_[i];
@@ -808,13 +840,20 @@ void MainWindow::PerformSearch(const std::string& query) {
             search_text += " " + entry.Get_log_level().value();
         }
         
-        // Convert to lowercase for case-insensitive search
-        std::string lower_query = query;
-        std::string lower_text = search_text;
-        std::transform(lower_query.begin(), lower_query.end(), lower_query.begin(), ::tolower);
-        std::transform(lower_text.begin(), lower_text.end(), lower_text.begin(), ::tolower);
+        bool found = false;
+        if (case_sensitive) {
+            // Case-sensitive search
+            found = search_text.find(query) != std::string::npos;
+        } else {
+            // Case-insensitive search
+            std::string lower_query = query;
+            std::string lower_text = search_text;
+            std::transform(lower_query.begin(), lower_query.end(), lower_query.begin(), ::tolower);
+            std::transform(lower_text.begin(), lower_text.end(), lower_text.begin(), ::tolower);
+            found = lower_text.find(lower_query) != std::string::npos;
+        }
         
-        if (lower_text.find(lower_query) != std::string::npos) {
+        if (found) {
             search_results_.push_back(i);
         }
     }
@@ -1312,6 +1351,59 @@ void MainWindow::ClearContext() {
     context_lines_ = 0;
     ApplyCurrentFilter();
     last_error_ = "Context lines cleared";
+}
+
+// Helper methods
+bool MainWindow::HasUppercaseLetters(const std::string& text) const {
+    return std::any_of(text.begin(), text.end(), [](char c) {
+        return std::isupper(c);
+    });
+}
+
+ftxui::Element MainWindow::RenderSearchStatusBar() const {
+    using namespace ftxui;
+    
+    if (show_search_) {
+        // Search status bar
+        std::string search_text;
+        Color bg_color = Color::Default;
+        
+        if (search_input_mode_) {
+            // Currently typing search
+            search_text = "Search: " + search_query_ + " (Enter to confirm, + to promote, Esc to cancel)";
+            bg_color = Color::Blue;
+        } else {
+            // Search completed, showing results
+            if (search_results_.empty()) {
+                search_text = "No matches found for '" + search_query_ + "' (n/N to navigate, Esc to exit)";
+                bg_color = Color::Red;
+            } else {
+                search_text = "Found " + std::to_string(search_results_.size()) + " matches for '" + search_query_ + "' (n/N to navigate, + to promote, Esc to exit)";
+                bg_color = Color::Green;
+            }
+        }
+        
+        return text(search_text) | bgcolor(bg_color) | color(Color::White);
+    }
+    
+    if (show_contextual_filter_dialog_) {
+        // Contextual filter dialog status bar
+        if (selected_entry_index_ >= 0 && selected_entry_index_ < static_cast<int>(filtered_entries_.size())) {
+            const LogEntry& entry = filtered_entries_[selected_entry_index_];
+            std::string options = "Create filter: [1] After timestamp [2] Logger=" + entry.Get_logger_name();
+            if (entry.Get_log_level().has_value()) {
+                options += " [3] Level=" + entry.Get_log_level().value();
+            }
+            if (entry.Get_frame_number().has_value()) {
+                options += " [4] After frame";
+            }
+            options += " (Esc to cancel)";
+            
+            return text(options) | bgcolor(Color::Yellow) | color(Color::Black);
+        }
+    }
+    
+    return text("");
 }
 
 // Helper method to apply the current filter expression

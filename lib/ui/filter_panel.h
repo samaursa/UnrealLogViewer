@@ -123,6 +123,11 @@ public:
     void ToggleExpansion();
     
     /**
+     * Delete the selected filter.
+     */
+    void DeleteSelectedFilter();
+    
+    /**
      * Set the callback to be called when filters are changed.
      * @param callback Function to call when filters are changed.
      */
