@@ -342,6 +342,7 @@ private:
     void UpdateStatusBar();
     void ApplyConfiguration();
     void SaveConfiguration();
+    int GetVisibleHeight() const;
     ftxui::Element RenderLogTable() const;
     ftxui::Element RenderStatusBar() const;
     ftxui::Element RenderFilterPanel() const;

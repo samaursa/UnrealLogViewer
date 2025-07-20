@@ -751,14 +751,14 @@ void MainWindow::PageDown() {
 
 void MainWindow::HalfPageUp() {
     // Use the same visible height as in RenderLogTable for consistency
-    int visible_height = 15; // Same as in RenderLogTable
+    int visible_height = GetVisibleHeight();
     int half_page_size = std::max(1, visible_height / 2);
     ScrollUp(half_page_size);
 }
 
 void MainWindow::HalfPageDown() {
     // Use the same visible height as in RenderLogTable for consistency
-    int visible_height = 15; // Same as in RenderLogTable
+    int visible_height = GetVisibleHeight();
     int half_page_size = std::max(1, visible_height / 2);
     ScrollDown(half_page_size);
 }
@@ -783,6 +783,15 @@ void MainWindow::SaveConfiguration() {
     // Placeholder implementation
 }
 
+int MainWindow::GetVisibleHeight() const {
+    // Calculate dynamic height based on available terminal space
+    int visible_height = std::max(10, window_height_ - 5); // Reserve space for header, status bar, etc.
+    if (visible_height <= 0 || window_height_ <= 0) {
+        visible_height = 25; // Fallback to reasonable default
+    }
+    return visible_height;
+}
+
 ftxui::Element MainWindow::RenderLogTable() const {
     std::vector<Element> rows;
     
@@ -797,24 +806,35 @@ ftxui::Element MainWindow::RenderLogTable() const {
             rows.push_back(text("No entries match the current filters.") | center);
         }
     } else {
-        // Calculate visible range for virtual scrolling
-        // Use a reasonable default height for the display area
-        int visible_height = 15; // Show 15 entries at once
-        int start_index = scroll_offset_;
-        int end_index = std::min(start_index + visible_height, static_cast<int>(filtered_entries_.size()));
+        // Calculate a generous viewport that fills the terminal
+        // Use a much larger buffer to fill the available space
+        int viewport_size = std::max(50, window_height_ > 0 ? window_height_ - 3 : 100);
         
-        // Render visible log entries
+        // Ensure selected entry is visible by centering it in the viewport
+        int half_viewport = viewport_size / 2;
+        int start_index = std::max(0, selected_entry_index_ - half_viewport);
+        int end_index = std::min(start_index + viewport_size, static_cast<int>(filtered_entries_.size()));
+        
+        // Adjust start_index if we're near the end
+        if (end_index - start_index < viewport_size && start_index > 0) {
+            start_index = std::max(0, end_index - viewport_size);
+        }
+        
+        // Render the viewport entries
         for (int i = start_index; i < end_index; ++i) {
             bool is_selected = (i == selected_entry_index_);
             rows.push_back(RenderLogEntry(filtered_entries_[i], is_selected));
         }
         
-        // Remove the scroll indicator from here - it will be moved to status bar
+        // Note: scroll_offset_ will be updated by navigation methods, not here in const render method
     }
     
     // Add visual focus indicator - main window has focus when filter panel doesn't
     bool main_has_focus = !filter_panel_ || !filter_panel_->IsFocused();
-    Element window_element = window(text(GetTitle()), vbox(rows));
+    
+    // Create scrollable content that fills available space
+    Element scrollable_content = vbox(rows) | vscroll_indicator | yframe | yflex;
+    Element window_element = window(text(GetTitle()), scrollable_content);
     
     if (main_has_focus) {
         // Main window has focus - add bright border
@@ -824,7 +844,7 @@ ftxui::Element MainWindow::RenderLogTable() const {
         window_element = window_element | border | dim;
     }
     
-    return window_element;
+    return window_element | flex;
 }
 
 ftxui::Element MainWindow::RenderStatusBar() const {
@@ -846,19 +866,15 @@ ftxui::Element MainWindow::RenderStatusBar() const {
     // Entry count and scroll info on the right
     std::string count_info;
     if (!filtered_entries_.empty()) {
-        int visible_height = 15; // Same as in RenderLogTable
-        int start_index = scroll_offset_;
-        int end_index = std::min(start_index + visible_height, static_cast<int>(filtered_entries_.size()));
-        
-        count_info = "Showing " + std::to_string(start_index + 1) + "-" + 
-                    std::to_string(end_index) + " of " + 
-                    std::to_string(filtered_entries_.size()) + " entries";
+        // Show current selection and total count
+        count_info = "Entry " + std::to_string(selected_entry_index_ + 1) + " of " + 
+                    std::to_string(filtered_entries_.size());
         
         if (filtered_entries_.size() != log_entries_.size()) {
             count_info += " (filtered from " + std::to_string(log_entries_.size()) + ")";
         }
     } else {
-        count_info = std::to_string(log_entries_.size()) + " entries";
+        count_info = "No entries";
     }
     status_elements.push_back(text(count_info));
     
