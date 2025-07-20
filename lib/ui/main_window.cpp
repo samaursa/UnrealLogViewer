@@ -52,6 +52,18 @@ public:
             return true;
         }
         
+        // Word wrap toggle
+        if (event == Event::Character('w')) {
+            parent_->ToggleWordWrap();
+            return true;
+        }
+        
+        // Detail view toggle
+        if (event == Event::Character('d')) {
+            parent_->ToggleDetailView();
+            return true;
+        }
+        
         if (event == Event::Character('h') || event == Event::F1) {
             // Toggle help - placeholder for now
             return true;
@@ -442,11 +454,17 @@ void MainWindow::Initialize() {
 }
 
 ftxui::Element MainWindow::Render() const {
-    // Main layout: log table + status bar
+    // Main layout: log table + detail view + status bar
     std::vector<Element> main_elements;
     
     // Add log table (takes most of the space)
     main_elements.push_back(RenderLogTable() | flex);
+    
+    // Add detail view if enabled (shows full raw log entry)
+    if (show_detail_view_) {
+        main_elements.push_back(separator());
+        main_elements.push_back(RenderDetailView() | size(HEIGHT, EQUAL, 5));
+    }
     
     // Add search status bar if active (appears above main status bar)
     if (show_search_ || show_contextual_filter_dialog_) {
@@ -892,6 +910,58 @@ ftxui::Element MainWindow::RenderFilterPanel() const {
     filter_elements.push_back(text("A - Add filter"));
     
     return window(text("Filters"), vbox(filter_elements));
+}
+
+ftxui::Element MainWindow::RenderDetailView() const {
+    std::vector<Element> detail_elements;
+    
+    // Show the full raw log entry for the currently selected entry
+    if (!filtered_entries_.empty() && selected_entry_index_ >= 0 && 
+        selected_entry_index_ < static_cast<int>(filtered_entries_.size())) {
+        
+        const auto& selected_entry = filtered_entries_[selected_entry_index_];
+        
+        // Show the raw log line with word wrapping
+        std::string raw_line = selected_entry.Get_raw_line();
+        
+        if (word_wrap_enabled_) {
+            // Split long lines into multiple lines for word wrapping
+            const size_t max_width = 120; // Adjust based on terminal width
+            std::vector<std::string> wrapped_lines;
+            
+            while (raw_line.length() > max_width) {
+                size_t break_pos = raw_line.find_last_of(' ', max_width);
+                if (break_pos == std::string::npos || break_pos == 0) {
+                    break_pos = max_width; // Hard break if no space found
+                }
+                
+                wrapped_lines.push_back(raw_line.substr(0, break_pos));
+                raw_line = raw_line.substr(break_pos + (break_pos < raw_line.length() && raw_line[break_pos] == ' ' ? 1 : 0));
+            }
+            
+            if (!raw_line.empty()) {
+                wrapped_lines.push_back(raw_line);
+            }
+            
+            // Add each wrapped line as a separate element
+            for (const auto& line : wrapped_lines) {
+                detail_elements.push_back(text(line));
+            }
+        } else {
+            // Show the full line without wrapping (may be truncated by terminal)
+            detail_elements.push_back(text(raw_line));
+        }
+        
+        // Add entry metadata
+        detail_elements.push_back(separator());
+        detail_elements.push_back(text("Line: " + std::to_string(selected_entry.Get_line_number()) + 
+                                      " | Type: " + (selected_entry.IsStructured() ? "Structured" : 
+                                                   selected_entry.IsSemiStructured() ? "Semi-Structured" : "Unstructured")));
+    } else {
+        detail_elements.push_back(text("No entry selected") | center);
+    }
+    
+    return window(text("Detail View (Raw Log Entry)"), vbox(detail_elements));
 }
 
 ftxui::Element MainWindow::RenderHelpDialog() const {
@@ -1380,6 +1450,26 @@ void MainWindow::ToggleFilterPanel() {
     
     // Provide feedback
     last_error_ = show_filter_panel_ ? "Filter panel shown" : "Filter panel hidden";
+}
+
+void MainWindow::ToggleWordWrap() {
+    word_wrap_enabled_ = !word_wrap_enabled_;
+    
+    if (word_wrap_enabled_) {
+        last_error_ = "Word wrap enabled - long lines will wrap";
+    } else {
+        last_error_ = "Word wrap disabled - long lines will be truncated";
+    }
+}
+
+void MainWindow::ToggleDetailView() {
+    show_detail_view_ = !show_detail_view_;
+    
+    if (show_detail_view_) {
+        last_error_ = "Detail view shown - full log entry displayed below";
+    } else {
+        last_error_ = "Detail view hidden - press 'd' to show";
+    }
 }
 
 void MainWindow::CreateSampleLogEntries() {

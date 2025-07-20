@@ -270,6 +270,12 @@ public:
     void ToggleFilterPanel();
     FilterPanel* GetFilterPanel() { return filter_panel_.get(); }
     bool IsFilterPanelVisible() const { return show_filter_panel_; }
+    
+    // Word wrap and detail view functionality
+    void ToggleWordWrap();
+    void ToggleDetailView();
+    bool IsWordWrapEnabled() const { return word_wrap_enabled_; }
+    bool IsDetailViewVisible() const { return show_detail_view_; }
 
 private:
     // FTXUI component
@@ -301,6 +307,8 @@ private:
     bool show_filter_panel_ = false; // Start hidden by default
     bool show_search_ = false;
     bool show_jump_dialog_ = false;
+    bool word_wrap_enabled_ = false; // Word wrap toggle
+    bool show_detail_view_ = true; // Detail view window toggle
     int window_width_ = 0;
     int window_height_ = 0;
     
@@ -351,6 +359,9 @@ private:
     // Rendering helpers
     ftxui::Element RenderLogEntry(const LogEntry& entry, bool is_selected) const;
     ftxui::Element RenderTableHeader() const;
+    ftxui::Element RenderDetailView() const;
+    ftxui::Element RenderQuickFilterDialog() const;
+    ftxui::Element RenderJumpDialog() const;
     ftxui::Color GetColorForLogLevel(const std::string& level) const;
     
     // Navigation helpers

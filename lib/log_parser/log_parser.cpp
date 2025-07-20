@@ -90,11 +90,13 @@ namespace ue_log {
         try {
             // Structured pattern: [timestamp][frame]Logger: Level: message
             // Example: [2025.07.16-10.01.25:951][425]CkAbility: Trace: [PIE-ID -2] Discovered and Adding Cue
-            structured_pattern = std::regex(R"(\[([^\]]+)\]\[(\d+)\]([^:]+):\s*([^:]+):\s*(.+))");
+            // Frame can have leading/trailing spaces: [  0], [425], etc.
+            structured_pattern = std::regex(R"(\[([^\]]+)\]\[\s*(\d+)\s*\]([^:]+):\s*([^:]+):\s*(.+))");
             
             // Semi-structured pattern: [timestamp][frame]Logger: message (no level)
             // Example: [2025.07.16-10.01.25:951][425]LogTemp: Some message without level
-            semi_structured_pattern = std::regex(R"(\[([^\]]+)\]\[(\d+)\]([^:]+):\s*(.+))");
+            // Frame can have leading/trailing spaces: [  0], [425], etc.
+            semi_structured_pattern = std::regex(R"(\[([^\]]+)\]\[\s*(\d+)\s*\]([^:]+):\s*(.+))");
             
             // Unstructured pattern: Logger: Level: message (no timestamp/frame)
             // Example: LogCsvProfiler: Display: Metadata set : cpu="AuthenticAMD|AMD Ryzen 9 7900X 12-Core Processor"
