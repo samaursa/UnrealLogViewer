@@ -824,19 +824,21 @@ ftxui::Element MainWindow::RenderLogTable() const {
             rows.push_back(text("No entries match the current filters.") | center);
         }
     } else {
-        // Calculate a generous viewport that fills the terminal
-        // Use a much larger buffer to fill the available space
-        int viewport_size = std::max(50, window_height_ > 0 ? window_height_ - 3 : 100);
-        
-        // Ensure selected entry is visible by centering it in the viewport
-        int half_viewport = viewport_size / 2;
-        int start_index = std::max(0, selected_entry_index_ - half_viewport);
-        int end_index = std::min(start_index + viewport_size, static_cast<int>(filtered_entries_.size()));
-        
-        // Adjust start_index if we're near the end
-        if (end_index - start_index < viewport_size && start_index > 0) {
-            start_index = std::max(0, end_index - viewport_size);
+        // Calculate viewport size based on available space
+        // Account for detail view if it's open
+        int available_height = window_height_ > 0 ? window_height_ - 3 : 100; // Reserve space for header, status bar
+        if (show_detail_view_) {
+            available_height -= 7; // Reserve space for detail view (5 lines + separator + title)
         }
+        int viewport_size = std::max(10, available_height);
+        
+        // Allow scrolling past the end so last entries can be seen mid-screen
+        int half_viewport = viewport_size / 2;
+        int max_start_index = static_cast<int>(filtered_entries_.size()) - half_viewport;
+        
+        // Calculate start index - allow going past the end for better visibility of last entries
+        int start_index = std::max(0, std::min(selected_entry_index_ - half_viewport, max_start_index));
+        int end_index = std::min(start_index + viewport_size, static_cast<int>(filtered_entries_.size()));
         
         // Render the viewport entries
         for (int i = start_index; i < end_index; ++i) {
@@ -913,55 +915,22 @@ ftxui::Element MainWindow::RenderFilterPanel() const {
 }
 
 ftxui::Element MainWindow::RenderDetailView() const {
-    std::vector<Element> detail_elements;
-    
-    // Show the full raw log entry for the currently selected entry
-    if (!filtered_entries_.empty() && selected_entry_index_ >= 0 && 
-        selected_entry_index_ < static_cast<int>(filtered_entries_.size())) {
-        
-        const auto& selected_entry = filtered_entries_[selected_entry_index_];
-        
-        // Show the raw log line with word wrapping
-        std::string raw_line = selected_entry.Get_raw_line();
-        
-        if (word_wrap_enabled_) {
-            // Split long lines into multiple lines for word wrapping
-            const size_t max_width = 120; // Adjust based on terminal width
-            std::vector<std::string> wrapped_lines;
-            
-            while (raw_line.length() > max_width) {
-                size_t break_pos = raw_line.find_last_of(' ', max_width);
-                if (break_pos == std::string::npos || break_pos == 0) {
-                    break_pos = max_width; // Hard break if no space found
-                }
-                
-                wrapped_lines.push_back(raw_line.substr(0, break_pos));
-                raw_line = raw_line.substr(break_pos + (break_pos < raw_line.length() && raw_line[break_pos] == ' ' ? 1 : 0));
-            }
-            
-            if (!raw_line.empty()) {
-                wrapped_lines.push_back(raw_line);
-            }
-            
-            // Add each wrapped line as a separate element
-            for (const auto& line : wrapped_lines) {
-                detail_elements.push_back(text(line));
-            }
-        } else {
-            // Show the full line without wrapping (may be truncated by terminal)
-            detail_elements.push_back(text(raw_line));
-        }
-        
-        // Add entry metadata
-        detail_elements.push_back(separator());
-        detail_elements.push_back(text("Line: " + std::to_string(selected_entry.Get_line_number()) + 
-                                      " | Type: " + (selected_entry.IsStructured() ? "Structured" : 
-                                                   selected_entry.IsSemiStructured() ? "Semi-Structured" : "Unstructured")));
-    } else {
-        detail_elements.push_back(text("No entry selected") | center);
+    if (selected_entry_index_ < 0 || selected_entry_index_ >= static_cast<int>(filtered_entries_.size())) {
+        return window(text("Detail View"), text("No entry selected") | center);
     }
     
-    return window(text("Detail View (Raw Log Entry)"), vbox(detail_elements));
+    const auto& selected_entry = filtered_entries_[selected_entry_index_];
+    
+    // Create title with line number and type information
+    std::string entry_type = selected_entry.IsStructured() ? "Structured" : 
+                            selected_entry.IsSemiStructured() ? "Semi-Structured" : "Unstructured";
+    std::string title = "Detail View - Line " + std::to_string(selected_entry.Get_line_number()) + " (" + entry_type + ")";
+    
+    // Always use word wrapping in detail view for better readability
+    std::string raw_line = selected_entry.Get_raw_line();
+    Element content = paragraph(raw_line);
+    
+    return window(text(title), content);
 }
 
 ftxui::Element MainWindow::RenderHelpDialog() const {
@@ -995,39 +964,45 @@ ftxui::Element MainWindow::RenderLogEntry(const LogEntry& entry, bool is_selecte
     // Check if this entry is a match or context line
     bool is_match = match_line_numbers_.find(entry.Get_line_number()) != match_line_numbers_.end();
     
-    // Build the row as a single formatted string
-    std::string row_text;
+    // Build the row with separate elements for proper word wrapping
+    std::vector<Element> row_elements;
     
     // Line number column (if enabled)
     if (show_line_numbers_) {
         std::string line_num = std::to_string(entry.Get_line_number());
-        row_text += padString(line_num, 4) + " ";
+        row_elements.push_back(text(padString(line_num, 4)));
     }
     
     // Timestamp column
     std::string timestamp_str = entry.Get_timestamp().has_value() ? 
                                entry.Get_timestamp().value() : "N/A";
-    row_text += padString(timestamp_str, 25) + " ";
+    row_elements.push_back(text(padString(timestamp_str, 25)));
     
     // Frame column
     std::string frame_str = entry.Get_frame_number().has_value() ? 
                            std::to_string(entry.Get_frame_number().value()) : "N/A";
-    row_text += padString(frame_str, 3) + " ";
+    row_elements.push_back(text(padString(frame_str, 5)));
     
     // Logger column
     std::string logger_str = entry.Get_logger_name();
-    row_text += padString(logger_str, 18) + " ";
+    row_elements.push_back(text(padString(logger_str, 18)));
     
     // Log level column
     std::string level_str = entry.Get_log_level().has_value() ? 
                            entry.Get_log_level().value() : "N/A";
-    row_text += padString(level_str, 8) + " ";
+    row_elements.push_back(text(padString(level_str, 8)));
     
-    // Message column
-    row_text += entry.Get_message();
+    // Message column - handle word wrapping
+    Element message_element;
+    if (word_wrap_enabled_) {
+        message_element = paragraph(entry.Get_message());
+    } else {
+        message_element = text(entry.Get_message());
+    }
+    row_elements.push_back(message_element | flex);
     
-    // Create the element
-    Element row = text(row_text);
+    // Create the row element
+    Element row = hbox(row_elements);
     
     // Apply styling based on whether this is a match or context line
     if (!is_match && context_lines_ > 0) {
@@ -1063,20 +1038,20 @@ ftxui::Element MainWindow::RenderTableHeader() const {
         return str + std::string(width - str.length(), ' ');
     };
     
-    // Build the header as a single formatted string
-    std::string header_text;
+    // Build the header with separate elements to match the row layout
+    std::vector<Element> header_elements;
     
     if (show_line_numbers_) {
-        header_text += padString("Line", 4) + " ";
+        header_elements.push_back(text(padString("Line", 4)) | bold);
     }
     
-    header_text += padString("Timestamp", 25) + " ";
-    header_text += padString("Frm", 3) + " ";
-    header_text += padString("Logger", 18) + " ";
-    header_text += padString("Level", 8) + " ";
-    header_text += "Message";
+    header_elements.push_back(text(padString("Timestamp", 25)) | bold);
+    header_elements.push_back(text(padString("Frame", 5)) | bold);
+    header_elements.push_back(text(padString("Logger", 18)) | bold);
+    header_elements.push_back(text(padString("Level", 8)) | bold);
+    header_elements.push_back(text("Message") | bold | flex);
     
-    return text(header_text) | bold | inverted;
+    return hbox(header_elements) | inverted;
 }
 
 ftxui::Color MainWindow::GetColorForLogLevel(const std::string& level) const {
