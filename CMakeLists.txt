@@ -42,6 +42,12 @@ add_library(unreal_log_lib
   macros.h
   lib/common/result.h
   lib/common/result.cpp
+  lib/core/log_processor.h
+  lib/core/log_processor.cpp
+  lib/core/filter_manager.h
+  lib/core/filter_manager.cpp
+  lib/core/autotest_runner.h
+  lib/core/autotest_runner.cpp
   lib/log_parser/log_entry.h
   lib/log_parser/log_entry.cpp
   lib/log_parser/log_parser.h

@@ -85,15 +85,18 @@ The Unreal Engine Log Viewer is an enhanced FTXUI-based terminal application des
 
 ### Requirement 7: Navigation and Search
 
-**User Story:** As an Unreal Engine developer, I want efficient navigation and search capabilities, so that I can quickly locate specific log entries and move through large log files.
+**User Story:** As an Unreal Engine developer, I want efficient vim-style navigation and search capabilities, so that I can quickly locate specific log entries and move through large log files with familiar keyboard shortcuts.
 
 #### Acceptance Criteria
 
 1. WHEN navigating THEN the system SHALL support arrow keys for line-by-line movement and Page Up/Down for bulk scrolling
-2. WHEN jumping to locations THEN the system SHALL support Home/End keys to jump to start/end of logs
-3. WHEN searching THEN the system SHALL provide quick search functionality with real-time highlighting of matches
-4. WHEN navigating to specific locations THEN the system SHALL support direct navigation to line numbers or timestamps
-5. WHEN using keyboard shortcuts THEN the system SHALL provide Escape to cancel operations and context-sensitive help
+2. WHEN using vim-style navigation THEN the system SHALL support Ctrl+D and Ctrl+U for half-page down and up scrolling
+3. WHEN jumping to locations THEN the system SHALL support Home/End keys to jump to start/end of logs
+4. WHEN using vim-style commands THEN the system SHALL support ':' key to enter command mode for line number navigation (e.g., ':0' to go to line 0)
+5. WHEN using vim-style navigation THEN the system SHALL support 'g' key to jump to the start of the file
+6. WHEN searching THEN the system SHALL provide quick search functionality with real-time highlighting of matches
+7. WHEN navigating to specific locations THEN the system SHALL support direct navigation to line numbers or timestamps
+8. WHEN using keyboard shortcuts THEN the system SHALL provide Escape to cancel operations and context-sensitive help
 
 ### Requirement 8: Configuration and Persistence
 
@@ -124,7 +127,19 @@ The Unreal Engine Log Viewer is an enhanced FTXUI-based terminal application des
 9. WHEN organizing the project structure THEN the system SHALL separate the logger functionality into a reusable library, the main application as a separate executable, and the testing suite as another executable
 10. WHEN building the project THEN the CMakeLists.txt file SHALL support multiple applications (main app, test app) and the logger library
 
-### Requirement 10: Development and Testing Protocol
+### Requirement 10: UI Layout and Status Bar Improvements
+
+**User Story:** As an Unreal Engine developer, I want an optimized UI layout with better use of screen space and informative status display, so that I can see more log entries and have relevant information easily accessible.
+
+#### Acceptance Criteria
+
+1. WHEN viewing log entries THEN the system SHALL maximize the log display area by moving entry count information to the status bar
+2. WHEN displaying status information THEN the system SHALL show "showing X-Y out of Z entries" information in the status bar on the right side
+3. WHEN starting the application THEN the system SHALL hide the filter panel by default to maximize log viewing space
+4. WHEN no filters are configured THEN the system SHALL start with an empty filter area instead of default placeholder filters
+5. WHEN the filter panel is hidden THEN the system SHALL provide clear indication of how to show it (keyboard shortcut)
+
+### Requirement 11: Development and Testing Protocol
 
 **User Story:** As a developer working on the Unreal Engine Log Viewer, I want a clear testing protocol for GUI functionality, so that I can ensure features work correctly in the terminal environment.
 
@@ -132,6 +147,7 @@ The Unreal Engine Log Viewer is an enhanced FTXUI-based terminal application des
 
 1. WHEN implementing GUI features THEN the developer SHALL ask the user to test the application since GUI testing cannot be automated in this environment
 2. WHEN requesting user testing THEN the developer SHALL provide a concise test plan with specific steps to verify functionality
-3. WHEN building the application THEN the developer SHALL ensure it compiles successfully before requesting user testing
-4. WHEN testing focus management THEN the user SHALL verify that Tab key properly switches focus between main window and filter panel
-5. WHEN testing keyboard navigation THEN the user SHALL verify that arrow keys work correctly in both focused components
+3. WHEN building the application THEN the developer SHALL ensure it compiles successfully in Release mode before requesting user testing
+4. WHEN building for production THEN the system SHALL use Release configuration to ensure optimal performance
+5. WHEN testing focus management THEN the user SHALL verify that Tab key properly switches focus between main window and filter panel
+6. WHEN testing keyboard navigation THEN the user SHALL verify that arrow keys work correctly in both focused components

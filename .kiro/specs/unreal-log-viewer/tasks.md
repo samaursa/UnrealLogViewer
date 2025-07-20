@@ -166,6 +166,9 @@
 
 
 
+
+
+
     - Implement keyboard navigation (arrows, page up/down, home/end)
     - Add quick search functionality with real-time highlighting
     - Create jump-to-line and jump-to-timestamp features

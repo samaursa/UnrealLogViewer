@@ -1,6 +1,7 @@
 #include "../macros.h"
 #include "../lib/ui/main_window.h"
 #include "../lib/config/config_manager.h"
+#include "../lib/core/autotest_runner.h"
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
@@ -10,6 +11,9 @@
 #include <string>
 #include <memory>
 #include <filesystem>
+#include <thread>
+#include <atomic>
+#include <chrono>
 
 using namespace ftxui;
 using namespace ue_log;
@@ -45,29 +49,53 @@ int main(int argc, char* argv[]) {
             return app.exit(e);
         }
         
-        // Create configuration manager
-        auto config_manager = std::make_unique<ConfigManager>();
-        
-        // Create main window
-        auto main_window = std::make_unique<MainWindow>(config_manager.get());
-        
-        // Initialize the main window
-        main_window->Initialize();
-        
-        // Handle autotest mode
+        // Handle autotest mode first (before creating UI components)
         if (autotest_mode) {
             if (log_file_path.empty()) {
                 std::cerr << "Error: Log file path is required for autotest mode" << std::endl;
                 return 1;
             }
             
-            std::cout << "Running autotest mode..." << std::endl;
+            std::cout << "Running comprehensive autotest mode..." << std::endl;
             std::cout << "Log file: " << log_file_path << std::endl;
             std::cout << "Output report: " << autotest_output << std::endl;
             
-            bool success = main_window->RunAutotest(log_file_path, autotest_output);
+            // Create and run the new AutotestRunner with timeout protection
+            AutotestRunner autotest_runner(log_file_path, autotest_output);
+            autotest_runner.SetVerbose(true); // Enable verbose output for user feedback
             
-            if (success) {
+            // Run autotest with timeout (30 seconds)
+            std::atomic<bool> test_completed{false};
+            std::atomic<bool> test_success{false};
+            
+            std::thread autotest_thread([&]() {
+                try {
+                    test_success = autotest_runner.RunAllTests();
+                    test_completed = true;
+                } catch (...) {
+                    test_success = false;
+                    test_completed = true;
+                }
+            });
+            
+            // Wait for completion or timeout
+            const int timeout_seconds = 30;
+            for (int i = 0; i < timeout_seconds * 10; ++i) {
+                if (test_completed) {
+                    break;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+            
+            if (!test_completed) {
+                std::cerr << "Autotest timed out after " << timeout_seconds << " seconds. Terminating..." << std::endl;
+                // Force terminate the thread (not ideal but necessary for stuck processes)
+                std::terminate();
+            }
+            
+            autotest_thread.join();
+            
+            if (test_success) {
                 std::cout << "Autotest completed successfully. Report written to: " << autotest_output << std::endl;
                 return 0;
             } else {
@@ -78,6 +106,13 @@ int main(int argc, char* argv[]) {
         
         // Normal interactive mode
         std::cout << "Starting Unreal Log Viewer..." << std::endl;
+        
+        // Create configuration manager and main window for interactive mode
+        auto config_manager = std::make_unique<ConfigManager>();
+        auto main_window = std::make_unique<MainWindow>(config_manager.get());
+        
+        // Initialize the main window
+        main_window->Initialize();
         
         // Load initial file if provided
         if (!log_file_path.empty()) {

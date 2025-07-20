@@ -1,0 +1,34 @@
+=== Unreal Log Viewer Autotest Report ===
+Test started: 2025-07-19 22:00:13
+Log file: nav_test.log
+System info: Platform: Windows, Threads: 24
+
+
+1. File Loading...
+   ✓ Test completed successfully (0ms)
+
+2. Log Parsing...
+   ✓ Test completed successfully (0ms)
+
+3. Filter Functionality...
+   ✓ Test completed successfully (0ms)
+
+4. Navigation Logic...
+   ✓ Test completed successfully (0ms)
+
+5. Search Functionality...
+   ✓ Test completed successfully (0ms)
+
+6. Error Handling...
+   ✓ Test completed successfully (0ms)
+
+7. Performance...
+   ✓ Test completed successfully (0ms)
+
+=== Autotest Summary ===
+Total tests: 7
+Passed: 7
+Failed: 0
+Success rate: 100.0%
+Total duration: 3ms
+Overall result: SUCCESS - All tests passed
