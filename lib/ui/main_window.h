@@ -24,10 +24,15 @@ namespace ue_log {
 class MainWindow : public Component {
 public:
     /**
+     * Default constructor.
+     */
+    MainWindow();
+    
+    /**
      * Constructor.
      * @param config_manager Pointer to the configuration manager.
      */
-    explicit MainWindow(ConfigManager* config_manager = nullptr);
+    explicit MainWindow(ConfigManager* config_manager);
     
     /**
      * Destructor.
@@ -129,6 +134,41 @@ public:
      */
     std::string GetLastError() const { return last_error_; }
     
+    // Methods expected by tests (compatibility layer)
+    const std::vector<LogEntry>& GetDisplayedEntries() const { return filtered_entries_; }
+    int GetSelectedEntryIndex() const { return selected_entry_index_; }
+    bool IsTailing() const { return IsRealTimeMonitoringActive(); }
+    void ReloadCurrentFile() { ReloadLogFile(); }
+    void CloseCurrentFile();
+    
+    // Navigation methods for tests
+    void StartTailing();
+    void StopTailing();
+    void RefreshDisplay();
+    void SetTerminalSize(int width, int height);
+    void GoToTop();
+    void GoToBottom();
+    void GoToLine(int line_number);
+    void SelectNextEntry();
+    void SelectPreviousEntry();
+    
+    // FTXUI interface methods
+    ftxui::Component GetComponent();
+    ftxui::Element Render();
+    bool OnEvent(ftxui::Event event);
+    
+    // Component accessors for testing
+    LogParser* GetLogParser() const { return log_parser_.get(); }
+    FilterEngine* GetFilterEngine() const { return filter_engine_.get(); }
+    FileMonitor* GetFileMonitor() const { return file_monitor_.get(); }
+    FilterPanel* GetFilterPanel() const { return filter_panel_.get(); }
+    
+    // Helper methods for testing
+    bool HasLogParser() const { return log_parser_ != nullptr; }
+    bool HasFilterEngine() const { return filter_engine_ != nullptr; }
+    bool HasFileMonitor() const { return file_monitor_ != nullptr; }
+    bool HasFilterPanel() const { return filter_panel_ != nullptr; }
+    
     /**
      * Set the last error message (for status bar display).
      * @param error The error message to display.
@@ -148,11 +188,21 @@ public:
      */
     void Exit();
     
+    /**
+     * Run autotest mode - loads file, performs basic operations, and generates report.
+     * @param log_file_path Path to the log file to test with
+     * @param output_file_path Path to write the autotest report
+     * @return True if autotest completed successfully, false otherwise
+     */
+    bool RunAutotest(const std::string& log_file_path, const std::string& output_file_path);
+    
     // Navigation methods
     void ScrollUp(int count = 1);
     void ScrollDown(int count = 1);
     void PageUp();
     void PageDown();
+    void HalfPageUp();
+    void HalfPageDown();
     void ScrollToTop();
     void ScrollToBottom();
     
@@ -197,7 +247,24 @@ public:
     void HideJumpDialog();
     void JumpToLine(int line_number);
     void JumpToTimestamp(const std::string& timestamp);
+    void JumpToPercentage(int percentage);
     void ToggleJumpMode(); // Switch between line/timestamp mode
+    bool IsJumpDialogActive() const { return show_jump_dialog_; }
+    void AppendToJumpInput(const std::string& text);
+    void BackspaceJumpInput();
+    void ExecuteJump();
+    
+    // Quick filter functionality
+    void ShowQuickFilterDialog();
+    void HideQuickFilterDialog();
+    void ApplyQuickFilter(const std::string& filter_type);
+    bool IsQuickFilterDialogActive() const { return show_quick_filter_dialog_; }
+    
+    // Pattern-based navigation
+    void JumpToNextError();
+    void JumpToPreviousError();
+    void JumpToNextWarning();
+    void JumpToPreviousWarning();
     
     // Filter panel functionality
     void ToggleFilterPanel();
@@ -231,7 +298,7 @@ private:
     
     // UI state
     bool show_help_ = false;
-    bool show_filter_panel_ = true;
+    bool show_filter_panel_ = false; // Start hidden by default
     bool show_search_ = false;
     bool show_jump_dialog_ = false;
     int window_width_ = 0;
@@ -259,6 +326,9 @@ private:
     // Jump dialog state
     std::string jump_input_;
     bool jump_to_line_mode_ = true; // true for line, false for timestamp
+    
+    // Quick filter dialog state
+    bool show_quick_filter_dialog_ = false;
     
     // Callbacks
     std::function<void()> exit_callback_;

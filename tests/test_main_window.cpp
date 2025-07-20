@@ -1,5 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
-#include "../app/ui/main_window.h"
+#include "../lib/ui/main_window.h"
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -61,10 +61,10 @@ TEST_CASE("MainWindow Basic Functionality", "[ui][main_window]") {
         REQUIRE_NOTHROW(window.Initialize());
         
         // Verify components are accessible
-        REQUIRE(window.GetLogParser() != nullptr);
-        REQUIRE(window.GetFilterEngine() != nullptr);
-        REQUIRE(window.GetFileMonitor() != nullptr);
-        REQUIRE(window.GetFilterPanel() != nullptr);
+        REQUIRE(window.HasLogParser());
+        REQUIRE(window.HasFilterEngine());
+        REQUIRE(window.HasFileMonitor());
+        REQUIRE(window.HasFilterPanel());
     }
 }
 

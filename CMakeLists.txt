@@ -28,8 +28,14 @@ FetchContent_Declare(Catch2
   GIT_TAG v3.4.0
 )
 
+# CLI11 for command line parsing
+FetchContent_Declare(CLI11
+  GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
+  GIT_TAG v2.3.2
+)
+
 # Make dependencies available
-FetchContent_MakeAvailable(ftxui mio Catch2)
+FetchContent_MakeAvailable(ftxui mio Catch2 CLI11)
 
 # Create the core logging library
 add_library(unreal_log_lib
@@ -83,6 +89,7 @@ target_link_libraries(unreal_log_viewer
   PRIVATE ftxui::screen
   PRIVATE ftxui::dom
   PRIVATE ftxui::component
+  PRIVATE CLI11::CLI11
 )
 
 # Create the test application executable

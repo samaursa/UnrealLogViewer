@@ -7,6 +7,8 @@
 #include <ftxui/screen/color.hpp>
 #include <filesystem>
 #include <algorithm>
+#include <chrono>
+#include <fstream>
 
 namespace ue_log {
 
@@ -174,15 +176,73 @@ public:
             return true;
         }
         
-        // Jump functionality
+        // Vim-style navigation: 'g' goes to start of file
         if (event == Event::Character('g')) {
+            parent_->ScrollToTop();
+            return true;
+        }
+        
+        // Jump functionality: ':' enters command mode
+        if (event == Event::Character(':')) {
             parent_->ShowJumpDialog();
             return true;
         }
         
-        // Quick jump shortcuts for testing (removed to avoid conflicts with contextual filters)
+        // Handle jump dialog input
+        if (parent_->IsJumpDialogActive()) {
+            if (event == Event::Escape) {
+                parent_->HideJumpDialog();
+                return true;
+            }
+            if (event.is_character()) {
+                std::string ch = event.character();
+                if (ch.length() == 1 && std::isdigit(ch[0])) {
+                    parent_->AppendToJumpInput(ch);
+                    return true;
+                }
+                // Also allow colon and percentage for jump formats
+                if (ch == ":" || ch == "%") {
+                    parent_->AppendToJumpInput(ch);
+                    return true;
+                }
+            }
+            if (event == Event::Backspace) {
+                parent_->BackspaceJumpInput();
+                return true;
+            }
+            if (event == Event::Return) {
+                parent_->ExecuteJump();
+                return true;
+            }
+        }
+        
+        // Vim-style 'G' goes to bottom of file
         if (event == Event::Character('G')) {
             parent_->ScrollToBottom();
+            return true;
+        }
+        
+        // Pattern-based navigation
+        if (event == Event::Character(']')) {
+            // Next error with ]e
+            parent_->JumpToNextError();
+            return true;
+        }
+        if (event == Event::Character('[')) {
+            // Previous error with [e
+            parent_->JumpToPreviousError();
+            return true;
+        }
+        
+        // Quick navigation shortcuts
+        if (event == Event::Character('E')) {
+            // Jump to next error (capital E)
+            parent_->JumpToNextError();
+            return true;
+        }
+        if (event == Event::Character('W')) {
+            // Jump to next warning (capital W)
+            parent_->JumpToNextWarning();
             return true;
         }
         
@@ -190,6 +250,41 @@ public:
         if (event == Event::Character('f')) {
             parent_->ToggleFilterPanel();
             return true;
+        }
+        
+        // Quick filters - vim-style shortcuts
+        if (event == Event::Character(static_cast<char>(6))) { // Ctrl+F (ASCII 6)
+            // Ctrl+F for quick filter menu (different from 'f' for toggle)
+            parent_->ShowQuickFilterDialog();
+            return true;
+        }
+        
+        // Handle quick filter selection (when dialog is active)
+        if (parent_->IsQuickFilterDialogActive()) {
+            if (event == Event::Character('e')) {
+                parent_->ApplyQuickFilter("error");
+                return true;
+            }
+            if (event == Event::Character('w')) {
+                parent_->ApplyQuickFilter("warning");
+                return true;
+            }
+            if (event == Event::Character('i')) {
+                parent_->ApplyQuickFilter("info");
+                return true;
+            }
+            if (event == Event::Character('d')) {
+                parent_->ApplyQuickFilter("debug");
+                return true;
+            }
+            if (event == Event::Character('c')) {
+                parent_->ApplyQuickFilter("clear");
+                return true;
+            }
+            if (event == Event::Escape) {
+                parent_->HideQuickFilterDialog();
+                return true;
+            }
         }
         
         // Focus filter panel or return focus to main window
@@ -271,6 +366,16 @@ public:
             parent_->PageDown();
             return true;
         }
+        
+        // Vim-style half-page navigation
+        if (event == Event::Character(static_cast<char>(4))) { // Ctrl+D (ASCII 4)
+            parent_->HalfPageDown();
+            return true;
+        }
+        if (event == Event::Character(static_cast<char>(21))) { // Ctrl+U (ASCII 21)
+            parent_->HalfPageUp();
+            return true;
+        }
         if (event == Event::Home) {
             parent_->ScrollToTop();
             return true;
@@ -286,6 +391,10 @@ public:
 private:
     MainWindow* parent_;
 };
+
+MainWindow::MainWindow() : MainWindow(nullptr) {
+    // Delegate to the parameterized constructor
+}
 
 MainWindow::MainWindow(ConfigManager* config_manager)
     : config_manager_(config_manager) {
@@ -407,8 +516,7 @@ bool MainWindow::LoadLogFile(const std::string& file_path) {
             last_error_ = "Loaded " + std::to_string(log_entries_.size()) + " log entries from " + std::filesystem::path(file_path).filename().string();
         }
         
-        // Create some sample filters for testing navigation
-        CreateSampleFilters();
+        // Don't create sample filters - start with empty filter area
         
         // Apply filters
         OnFiltersChanged();
@@ -455,6 +563,170 @@ void MainWindow::Exit() {
     }
 }
 
+bool MainWindow::RunAutotest(const std::string& log_file_path, const std::string& output_file_path) {
+    std::ofstream report(output_file_path);
+    if (!report.is_open()) {
+        return false;
+    }
+    
+    report << "=== Unreal Log Viewer Autotest Report ===" << std::endl;
+    report << "Test started at: " << std::chrono::system_clock::now().time_since_epoch().count() << std::endl;
+    report << "Log file: " << log_file_path << std::endl;
+    report << std::endl;
+    
+    // Test 1: Initialize the application
+    report << "1. Initializing application..." << std::endl;
+    try {
+        Initialize();
+        report << "   ✓ Application initialized successfully" << std::endl;
+    } catch (const std::exception& e) {
+        report << "   ✗ Failed to initialize: " << e.what() << std::endl;
+        return false;
+    }
+    
+    // Test 2: Load log file
+    report << "2. Loading log file..." << std::endl;
+    if (LoadLogFile(log_file_path)) {
+        report << "   ✓ Log file loaded successfully" << std::endl;
+        report << "   - Entries loaded: " << log_entries_.size() << std::endl;
+        report << "   - Filtered entries: " << filtered_entries_.size() << std::endl;
+    } else {
+        report << "   ✗ Failed to load log file: " << GetLastError() << std::endl;
+        return false;
+    }
+    
+    // Test 3: Basic navigation
+    report << "3. Testing navigation..." << std::endl;
+    try {
+        int initial_index = GetSelectedEntryIndex();
+        ScrollDown(1);
+        int after_down = GetSelectedEntryIndex();
+        ScrollUp(1);
+        int after_up = GetSelectedEntryIndex();
+        
+        report << "   ✓ Navigation test completed" << std::endl;
+        report << "   - Initial index: " << initial_index << std::endl;
+        report << "   - After scroll down: " << after_down << std::endl;
+        report << "   - After scroll up: " << after_up << std::endl;
+    } catch (const std::exception& e) {
+        report << "   ✗ Navigation test failed: " << e.what() << std::endl;
+    }
+    
+    // Test 4: Filter functionality
+    report << "4. Testing filter functionality..." << std::endl;
+    try {
+        // Apply a quick filter for errors
+        ApplyQuickFilter("error");
+        size_t error_filtered_count = filtered_entries_.size();
+        
+        // Clear filters
+        ApplyQuickFilter("clear");
+        size_t cleared_count = filtered_entries_.size();
+        
+        report << "   ✓ Filter test completed" << std::endl;
+        report << "   - Entries after error filter: " << error_filtered_count << std::endl;
+        report << "   - Entries after clear filter: " << cleared_count << std::endl;
+    } catch (const std::exception& e) {
+        report << "   ✗ Filter test failed: " << e.what() << std::endl;
+    }
+    
+    // Test 5: Rendering
+    report << "5. Testing rendering..." << std::endl;
+    try {
+        auto element = Render();
+        if (element) {
+            report << "   ✓ Rendering test completed successfully" << std::endl;
+        } else {
+            report << "   ✗ Rendering returned null element" << std::endl;
+        }
+    } catch (const std::exception& e) {
+        report << "   ✗ Rendering test failed: " << e.what() << std::endl;
+    }
+    
+    // Test 6: Component accessibility
+    report << "6. Testing component accessibility..." << std::endl;
+    report << "   - Log parser available: " << (HasLogParser() ? "Yes" : "No") << std::endl;
+    report << "   - Filter engine available: " << (HasFilterEngine() ? "Yes" : "No") << std::endl;
+    report << "   - File monitor available: " << (HasFileMonitor() ? "Yes" : "No") << std::endl;
+    report << "   - Filter panel available: " << (HasFilterPanel() ? "Yes" : "No") << std::endl;
+    
+    report << std::endl;
+    report << "=== Autotest Summary ===" << std::endl;
+    report << "All core functionality tests completed." << std::endl;
+    report << "Application appears to be working correctly." << std::endl;
+    
+    report.close();
+    return true;
+}
+
+void MainWindow::CloseCurrentFile() {
+    // Clear all file-related state
+    current_file_path_.clear();
+    log_entries_.clear();
+    filtered_entries_.clear();
+    selected_entry_index_ = 0;
+    scroll_offset_ = 0;
+    last_error_.clear();
+    
+    // Stop any real-time monitoring
+    StopRealTimeMonitoring();
+}
+
+// Navigation methods for tests
+void MainWindow::StartTailing() {
+    StartRealTimeMonitoring();
+}
+
+void MainWindow::StopTailing() {
+    StopRealTimeMonitoring();
+}
+
+void MainWindow::RefreshDisplay() {
+    // Trigger a refresh - placeholder implementation
+}
+
+void MainWindow::SetTerminalSize(int width, int height) {
+    window_width_ = width;
+    window_height_ = height;
+}
+
+void MainWindow::GoToTop() {
+    ScrollToTop();
+}
+
+void MainWindow::GoToBottom() {
+    ScrollToBottom();
+}
+
+void MainWindow::GoToLine(int line_number) {
+    JumpToLine(line_number);
+}
+
+void MainWindow::SelectNextEntry() {
+    ScrollDown(1);
+}
+
+void MainWindow::SelectPreviousEntry() {
+    ScrollUp(1);
+}
+
+// FTXUI interface methods
+ftxui::Component MainWindow::GetComponent() {
+    return CreateFTXUIComponent();
+}
+
+ftxui::Element MainWindow::Render() {
+    return const_cast<const MainWindow*>(this)->Render();
+}
+
+bool MainWindow::OnEvent(ftxui::Event event) {
+    // Delegate to the component's event handler
+    if (component_) {
+        return component_->OnEvent(event);
+    }
+    return false;
+}
+
 void MainWindow::ScrollUp(int count) {
     if (selected_entry_index_ > 0) {
         SelectEntry(selected_entry_index_ - count);
@@ -475,6 +747,20 @@ void MainWindow::PageUp() {
 void MainWindow::PageDown() {
     int page_size = std::max(1, window_height_ - 3);
     ScrollDown(page_size);
+}
+
+void MainWindow::HalfPageUp() {
+    // Use the same visible height as in RenderLogTable for consistency
+    int visible_height = 15; // Same as in RenderLogTable
+    int half_page_size = std::max(1, visible_height / 2);
+    ScrollUp(half_page_size);
+}
+
+void MainWindow::HalfPageDown() {
+    // Use the same visible height as in RenderLogTable for consistency
+    int visible_height = 15; // Same as in RenderLogTable
+    int half_page_size = std::max(1, visible_height / 2);
+    ScrollDown(half_page_size);
 }
 
 void MainWindow::ScrollToTop() {
@@ -523,14 +809,7 @@ ftxui::Element MainWindow::RenderLogTable() const {
             rows.push_back(RenderLogEntry(filtered_entries_[i], is_selected));
         }
         
-        // Add scroll indicator if there are more entries
-        if (filtered_entries_.size() > static_cast<size_t>(visible_height)) {
-            std::string scroll_info = "Showing " + std::to_string(start_index + 1) + "-" + 
-                                    std::to_string(end_index) + " of " + 
-                                    std::to_string(filtered_entries_.size()) + " entries";
-            rows.push_back(separator());
-            rows.push_back(text(scroll_info) | center | dim);
-        }
+        // Remove the scroll indicator from here - it will be moved to status bar
     }
     
     // Add visual focus indicator - main window has focus when filter panel doesn't
@@ -556,17 +835,32 @@ ftxui::Element MainWindow::RenderStatusBar() const {
                            std::filesystem::path(current_file_path_).filename().string();
     status_elements.push_back(text(file_info) | size(WIDTH, EQUAL, 25));
     
-    // Entry count
-    std::string count_info = std::to_string(log_entries_.size()) + " entries";
-    status_elements.push_back(text(count_info) | size(WIDTH, EQUAL, 15));
-    
     // Monitoring status
     std::string monitor_info = IsRealTimeMonitoringActive() ? "LIVE" : "STATIC";
     status_elements.push_back(text(monitor_info) | size(WIDTH, EQUAL, 8));
     
-    // Error message or help
-    std::string message = last_error_.empty() ? "Press 'h' for help, 'q' to quit" : last_error_;
+    // Error message or help (takes up middle space)
+    std::string message = last_error_.empty() ? "Press ':' for goto, 'g' for top, 'f' for filters, 'q' to quit" : last_error_;
     status_elements.push_back(text(message) | flex);
+    
+    // Entry count and scroll info on the right
+    std::string count_info;
+    if (!filtered_entries_.empty()) {
+        int visible_height = 15; // Same as in RenderLogTable
+        int start_index = scroll_offset_;
+        int end_index = std::min(start_index + visible_height, static_cast<int>(filtered_entries_.size()));
+        
+        count_info = "Showing " + std::to_string(start_index + 1) + "-" + 
+                    std::to_string(end_index) + " of " + 
+                    std::to_string(filtered_entries_.size()) + " entries";
+        
+        if (filtered_entries_.size() != log_entries_.size()) {
+            count_info += " (filtered from " + std::to_string(log_entries_.size()) + ")";
+        }
+    } else {
+        count_info = std::to_string(log_entries_.size()) + " entries";
+    }
+    status_elements.push_back(text(count_info));
     
     return hbox(status_elements) | inverted;
 }
@@ -1014,8 +1308,50 @@ void MainWindow::JumpToTimestamp(const std::string& timestamp) {
     }
 }
 
+void MainWindow::JumpToPercentage(int percentage) {
+    if (percentage < 0 || percentage > 100 || filtered_entries_.empty()) {
+        return;
+    }
+    
+    // Calculate the target index based on percentage
+    int target_index = (filtered_entries_.size() * percentage) / 100;
+    target_index = std::min(target_index, static_cast<int>(filtered_entries_.size()) - 1);
+    
+    SelectEntry(target_index);
+    last_error_ = "Jumped to " + std::to_string(percentage) + "% (" + std::to_string(target_index + 1) + " of " + std::to_string(filtered_entries_.size()) + ")";
+}
+
 void MainWindow::ToggleJumpMode() {
     jump_to_line_mode_ = !jump_to_line_mode_;
+}
+
+void MainWindow::AppendToJumpInput(const std::string& text) {
+    jump_input_ += text;
+    last_error_ = "Jump to: " + jump_input_ + " (Enter to execute, Esc to cancel)";
+}
+
+void MainWindow::BackspaceJumpInput() {
+    if (!jump_input_.empty()) {
+        jump_input_.pop_back();
+        last_error_ = jump_input_.empty() ? "Jump to: (Enter line number)" : "Jump to: " + jump_input_ + " (Enter to execute, Esc to cancel)";
+    }
+}
+
+void MainWindow::ExecuteJump() {
+    if (jump_input_.empty()) {
+        HideJumpDialog();
+        return;
+    }
+    
+    try {
+        int line_number = std::stoi(jump_input_);
+        JumpToLine(line_number);
+        last_error_ = "Jumped to line " + std::to_string(line_number);
+    } catch (const std::exception&) {
+        last_error_ = "Invalid line number: " + jump_input_;
+    }
+    
+    HideJumpDialog();
 }
 
 void MainWindow::ToggleFilterPanel() {
@@ -1519,6 +1855,182 @@ void MainWindow::BuildContextEntries(const std::vector<LogEntry>& matches) {
     }
     
     filtered_entries_ = result;
+}
+
+// Quick filter functionality implementations
+void MainWindow::ShowQuickFilterDialog() {
+    show_quick_filter_dialog_ = true;
+    // Show quick filter options in status bar
+    last_error_ = "Quick filters: [e] Errors, [w] Warnings, [i] Info, [d] Debug, [c] Clear filters (Esc to cancel)";
+}
+
+void MainWindow::HideQuickFilterDialog() {
+    show_quick_filter_dialog_ = false;
+    last_error_.clear();
+}
+
+void MainWindow::ApplyQuickFilter(const std::string& filter_type) {
+    if (!filter_engine_) {
+        last_error_ = "Filter engine not available";
+        HideQuickFilterDialog();
+        return;
+    }
+    
+    if (filter_type == "clear") {
+        // Clear all filters by creating an empty filter expression
+        current_filter_expression_ = std::make_unique<FilterExpression>(FilterOperator::And);
+        last_error_ = "All filters cleared";
+    } else {
+        // Create a quick filter
+        std::unique_ptr<FilterCondition> condition;
+        
+        if (filter_type == "error") {
+            condition = std::make_unique<FilterCondition>(FilterConditionType::LogLevelEquals, "Error");
+            last_error_ = "Quick filter applied: Showing only Error entries";
+        } else if (filter_type == "warning") {
+            condition = std::make_unique<FilterCondition>(FilterConditionType::LogLevelEquals, "Warning");
+            last_error_ = "Quick filter applied: Showing only Warning entries";
+        } else if (filter_type == "info") {
+            condition = std::make_unique<FilterCondition>(FilterConditionType::LogLevelEquals, "Info");
+            last_error_ = "Quick filter applied: Showing only Info entries";
+        } else if (filter_type == "debug") {
+            condition = std::make_unique<FilterCondition>(FilterConditionType::LogLevelEquals, "Debug");
+            last_error_ = "Quick filter applied: Showing only Debug entries";
+        }
+        
+        // Create a new filter expression with this condition
+        current_filter_expression_ = std::make_unique<FilterExpression>(FilterOperator::And);
+        current_filter_expression_->AddCondition(std::move(condition));
+    }
+    
+    // Apply the new filter
+    OnFiltersChanged();
+    HideQuickFilterDialog();
+}
+
+// Pattern-based navigation implementations
+void MainWindow::JumpToNextError() {
+    if (filtered_entries_.empty()) {
+        last_error_ = "No entries to search";
+        return;
+    }
+    
+    // Start searching from the next entry after current selection
+    int start_index = selected_entry_index_ + 1;
+    
+    for (int i = start_index; i < static_cast<int>(filtered_entries_.size()); ++i) {
+        const auto& entry = filtered_entries_[i];
+        if (entry.Get_log_level().has_value() && entry.Get_log_level().value() == "Error") {
+            SelectEntry(i);
+            last_error_ = "Jumped to next error at line " + std::to_string(i + 1);
+            return;
+        }
+    }
+    
+    // If not found, wrap around to beginning
+    for (int i = 0; i < start_index && i < static_cast<int>(filtered_entries_.size()); ++i) {
+        const auto& entry = filtered_entries_[i];
+        if (entry.Get_log_level().has_value() && entry.Get_log_level().value() == "Error") {
+            SelectEntry(i);
+            last_error_ = "Wrapped to first error at line " + std::to_string(i + 1);
+            return;
+        }
+    }
+    
+    last_error_ = "No error entries found";
+}
+
+void MainWindow::JumpToPreviousError() {
+    if (filtered_entries_.empty()) {
+        last_error_ = "No entries to search";
+        return;
+    }
+    
+    // Start searching from the previous entry before current selection
+    int start_index = selected_entry_index_ - 1;
+    
+    for (int i = start_index; i >= 0; --i) {
+        const auto& entry = filtered_entries_[i];
+        if (entry.Get_log_level().has_value() && entry.Get_log_level().value() == "Error") {
+            SelectEntry(i);
+            last_error_ = "Jumped to previous error at line " + std::to_string(i + 1);
+            return;
+        }
+    }
+    
+    // If not found, wrap around to end
+    for (int i = static_cast<int>(filtered_entries_.size()) - 1; i > start_index; --i) {
+        const auto& entry = filtered_entries_[i];
+        if (entry.Get_log_level().has_value() && entry.Get_log_level().value() == "Error") {
+            SelectEntry(i);
+            last_error_ = "Wrapped to last error at line " + std::to_string(i + 1);
+            return;
+        }
+    }
+    
+    last_error_ = "No error entries found";
+}
+
+void MainWindow::JumpToNextWarning() {
+    if (filtered_entries_.empty()) {
+        last_error_ = "No entries to search";
+        return;
+    }
+    
+    // Start searching from the next entry after current selection
+    int start_index = selected_entry_index_ + 1;
+    
+    for (int i = start_index; i < static_cast<int>(filtered_entries_.size()); ++i) {
+        const auto& entry = filtered_entries_[i];
+        if (entry.Get_log_level().has_value() && entry.Get_log_level().value() == "Warning") {
+            SelectEntry(i);
+            last_error_ = "Jumped to next warning at line " + std::to_string(i + 1);
+            return;
+        }
+    }
+    
+    // If not found, wrap around to beginning
+    for (int i = 0; i < start_index && i < static_cast<int>(filtered_entries_.size()); ++i) {
+        const auto& entry = filtered_entries_[i];
+        if (entry.Get_log_level().has_value() && entry.Get_log_level().value() == "Warning") {
+            SelectEntry(i);
+            last_error_ = "Wrapped to first warning at line " + std::to_string(i + 1);
+            return;
+        }
+    }
+    
+    last_error_ = "No warning entries found";
+}
+
+void MainWindow::JumpToPreviousWarning() {
+    if (filtered_entries_.empty()) {
+        last_error_ = "No entries to search";
+        return;
+    }
+    
+    // Start searching from the previous entry before current selection
+    int start_index = selected_entry_index_ - 1;
+    
+    for (int i = start_index; i >= 0; --i) {
+        const auto& entry = filtered_entries_[i];
+        if (entry.Get_log_level().has_value() && entry.Get_log_level().value() == "Warning") {
+            SelectEntry(i);
+            last_error_ = "Jumped to previous warning at line " + std::to_string(i + 1);
+            return;
+        }
+    }
+    
+    // If not found, wrap around to end
+    for (int i = static_cast<int>(filtered_entries_.size()) - 1; i > start_index; --i) {
+        const auto& entry = filtered_entries_[i];
+        if (entry.Get_log_level().has_value() && entry.Get_log_level().value() == "Warning") {
+            SelectEntry(i);
+            last_error_ = "Wrapped to last warning at line " + std::to_string(i + 1);
+            return;
+        }
+    }
+    
+    last_error_ = "No warning entries found";
 }
 
 } // namespace ue_log

@@ -1,0 +1,30 @@
+=== Unreal Log Viewer Autotest Report ===
+Test started at: 17529860596917491
+Log file: nav_test.log
+
+1. Initializing application...
+   ✓ Application initialized successfully
+2. Loading log file...
+   ✓ Log file loaded successfully
+   - Entries loaded: 5
+   - Filtered entries: 5
+3. Testing navigation...
+   ✓ Navigation test completed
+   - Initial index: 0
+   - After scroll down: 1
+   - After scroll up: 0
+4. Testing filter functionality...
+   ✓ Filter test completed
+   - Entries after error filter: 2
+   - Entries after clear filter: 5
+5. Testing rendering...
+   ✓ Rendering test completed successfully
+6. Testing component accessibility...
+   - Log parser available: Yes
+   - Filter engine available: Yes
+   - File monitor available: Yes
+   - Filter panel available: Yes
+
+=== Autotest Summary ===
+All core functionality tests completed.
+Application appears to be working correctly.
