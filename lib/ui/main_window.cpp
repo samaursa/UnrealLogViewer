@@ -26,9 +26,19 @@ public:
         // Debug: Log all events
         // std::cout << "Event received" << std::endl;
         
-        // Handle ESC key - exit context menus only, never quit program
+        // Handle ESC key - priority order matters!
         if (event == Event::Escape) {
-            // Check if any context menus are active
+            // 1. First check vim command mode
+            if (parent_->IsVimCommandMode()) {
+                parent_->ClearVimCommandBuffer();
+                return true;
+            }
+            // 2. Then check jump dialog
+            if (parent_->IsJumpDialogActive()) {
+                parent_->HideJumpDialog();
+                return true;
+            }
+            // 3. Then check context menus
             if (parent_->IsContextualFilterDialogActive()) {
                 parent_->HideContextualFilterDialog();
                 return true;
@@ -166,13 +176,21 @@ public:
             return true;
         }
         
-        // Handle Number shortcuts for column-based filtering (1-5) - only when NOT searching
+        // Handle SHIFT+Number shortcuts for column-based filtering (Shift+1-5) - only when NOT searching
         if (event.is_character() && event.character().length() == 1) {
             char ch = event.character()[0];
             
-            // Check for number keys 1-5 for column-based filtering
-            if (ch >= '1' && ch <= '5') {
-                int column_number = ch - '1'; // Convert '1'-'5' to 0-4 index
+            // Check for SHIFT+number keys (!, @, #, $, %) for column-based filtering
+            if (ch == '!' || ch == '@' || ch == '#' || ch == '$' || ch == '%') {
+                int column_number;
+                switch (ch) {
+                    case '!': column_number = 0; break; // Shift+1
+                    case '@': column_number = 1; break; // Shift+2
+                    case '#': column_number = 2; break; // Shift+3
+                    case '$': column_number = 3; break; // Shift+4
+                    case '%': column_number = 4; break; // Shift+5
+                    default: column_number = 0; break;
+                }
                 parent_->CreateDirectColumnFilter(column_number);
                 return true;
             }
@@ -258,7 +276,29 @@ public:
             }
         }
         
-        // Context lines control
+        // Handle vim-style navigation commands (number + j/k) - MUST come before other number handling
+        if (event.is_character() && event.character().length() == 1) {
+            char ch = event.character()[0];
+            
+            // Check if we're building a vim command (digits followed by j/k)
+            if (std::isdigit(ch) || ch == 'j' || ch == 'k') {
+                if (parent_->HandleVimStyleNavigation(event.character())) {
+                    return true;
+                }
+            }
+        }
+        
+        // Handle Backspace for vim command mode
+        if (event == Event::Backspace) {
+            if (parent_->IsVimCommandMode()) {
+                parent_->BackspaceVimCommand();
+                return true;
+            }
+        }
+        
+
+        
+        // Context lines control (moved after vim navigation to avoid conflicts)
         if (event == Event::Character('{')) {
             parent_->DecreaseContext();
             return true;
@@ -268,8 +308,11 @@ public:
             return true;
         }
         if (event == Event::Character('0')) {
-            parent_->SetContextLines(0);
-            return true;
+            // Only handle '0' for context lines if NOT in vim command mode
+            if (!parent_->IsVimCommandMode()) {
+                parent_->SetContextLines(0);
+                return true;
+            }
         }
         
         // Vim-style navigation: 'g' goes to start of file
@@ -441,6 +484,8 @@ public:
             }
         }
         
+
+        
         // Navigation keys - check if filter panel has focus first
         if (event == Event::ArrowUp || event == Event::Character('k')) {
             // If filter panel has focus, let it handle the event
@@ -514,6 +559,8 @@ MainWindow::MainWindow(ConfigManager* config_manager)
     
     // Initialize UI components
     filter_panel_ = std::make_unique<FilterPanel>(filter_engine_.get(), config_manager_);
+    visual_theme_manager_ = std::make_unique<VisualThemeManager>();
+    relative_line_system_ = std::make_unique<RelativeLineNumberSystem>();
 }
 
 MainWindow::~MainWindow() {
@@ -534,6 +581,11 @@ void MainWindow::Initialize() {
         filter_panel_->SetFiltersChangedCallback([this]() {
             OnFiltersChanged();
         });
+    }
+    
+    // Initialize visual components
+    if (visual_theme_manager_) {
+        log_entry_renderer_ = std::make_unique<LogEntryRenderer>(visual_theme_manager_.get());
     }
     
     // Apply basic configuration
@@ -975,10 +1027,13 @@ ftxui::Element MainWindow::RenderStatusBar() const {
     
     // Entry count and scroll info on the right
     std::string count_info;
-    if (!filtered_entries_.empty()) {
-        // Show current selection and total count
+    if (!filtered_entries_.empty() && selected_entry_index_ >= 0 && selected_entry_index_ < static_cast<int>(filtered_entries_.size())) {
+        const auto& selected_entry = filtered_entries_[selected_entry_index_];
+        
+        // Show current selection, total count, and absolute line number
         count_info = "Entry " + std::to_string(selected_entry_index_ + 1) + " of " + 
-                    std::to_string(filtered_entries_.size());
+                    std::to_string(filtered_entries_.size()) + 
+                    " | Line " + std::to_string(selected_entry.Get_line_number());
         
         if (filtered_entries_.size() != log_entries_.size()) {
             count_info += " (filtered from " + std::to_string(log_entries_.size()) + ")";
@@ -1043,6 +1098,50 @@ ftxui::Element MainWindow::RenderHelpDialog() const {
 }
 
 ftxui::Element MainWindow::RenderLogEntry(const LogEntry& entry, bool is_selected) const {
+    // Use the LogEntryRenderer if available, otherwise fall back to basic rendering
+    if (log_entry_renderer_) {
+        // Configure the renderer with current settings
+        log_entry_renderer_->SetWordWrapEnabled(word_wrap_enabled_);
+        log_entry_renderer_->SetShowLineNumbers(show_line_numbers_);
+        
+        // Calculate relative line number using RelativeLineNumberSystem
+        int relative_line_number = 0;
+        if (relative_line_system_) {
+            // Find the index of this entry in the filtered entries
+            int entry_index = -1;
+            for (int i = 0; i < static_cast<int>(filtered_entries_.size()); ++i) {
+                if (&filtered_entries_[i] == &entry) {
+                    entry_index = i;
+                    break;
+                }
+            }
+            
+            if (entry_index >= 0) {
+                relative_line_number = entry_index - selected_entry_index_;
+            }
+        }
+        
+        // Render using the new LogEntryRenderer
+        Element row = log_entry_renderer_->RenderLogEntry(entry, is_selected, relative_line_number);
+        
+        // Apply additional styling for context lines and search highlighting
+        bool is_match = match_line_numbers_.find(entry.Get_line_number()) != match_line_numbers_.end();
+        
+        if (!is_match && context_lines_ > 0) {
+            // This is a context line - make it muted/gray
+            row = row | dim | color(Color::GrayDark);
+        }
+        
+        // Handle inline search highlighting (preserve existing functionality)
+        if (is_selected && show_inline_search_ && !inline_search_query_.empty() && !inline_search_matches_.empty()) {
+            // Note: This will be enhanced in the LogEntryRenderer in future iterations
+            // For now, the basic highlighting is handled by the renderer
+        }
+        
+        return row;
+    }
+    
+    // Fallback to original rendering if LogEntryRenderer is not available
     // Helper function to pad string to fixed width
     auto padString = [](const std::string& str, size_t width) -> std::string {
         if (str.length() >= width) {
@@ -1073,7 +1172,7 @@ ftxui::Element MainWindow::RenderLogEntry(const LogEntry& entry, bool is_selecte
                            std::to_string(entry.Get_frame_number().value()) : "N/A";
     row_elements.push_back(text(padString(frame_str, 5)));
     
-    // Logger column
+    // Logger column (basic text without badge)
     std::string logger_str = entry.Get_logger_name();
     row_elements.push_back(text(padString(logger_str, 18)));
     
@@ -1123,6 +1222,15 @@ ftxui::Element MainWindow::RenderLogEntry(const LogEntry& entry, bool is_selecte
 }
 
 ftxui::Element MainWindow::RenderTableHeader() const {
+    // Use the LogEntryRenderer if available, otherwise fall back to basic rendering
+    if (log_entry_renderer_) {
+        // Configure the renderer with current settings
+        log_entry_renderer_->SetShowLineNumbers(show_line_numbers_);
+        
+        return log_entry_renderer_->RenderTableHeader();
+    }
+    
+    // Fallback to original header rendering if LogEntryRenderer is not available
     // Helper function to pad string to fixed width
     auto padString = [](const std::string& str, size_t width) -> std::string {
         if (str.length() >= width) {
@@ -1693,6 +1801,77 @@ void MainWindow::ToggleDetailView() {
         last_error_ = "Detail view shown - full log entry displayed below";
     } else {
         last_error_ = "Detail view hidden - press 'd' to show";
+    }
+}
+
+bool MainWindow::HandleVimStyleNavigation(const std::string& input) {
+    if (input.empty()) {
+        return false;
+    }
+    
+    char ch = input[0];
+    
+    // Handle digits - add to command buffer
+    if (std::isdigit(ch)) {
+        vim_command_buffer_ += ch;
+        vim_command_mode_ = true;
+        last_error_ = "Vim command: " + vim_command_buffer_ + " (press j/k to execute)";
+        return true;
+    }
+    
+    // Handle j/k commands
+    if (ch == 'j' || ch == 'k') {
+        std::string full_command = vim_command_buffer_ + ch;
+        
+        int jump_distance;
+        char direction;
+        
+        if (relative_line_system_->HandleNavigationInput(full_command, jump_distance, direction)) {
+            ExecuteVimNavigation(jump_distance, direction);
+            ClearVimCommandBuffer();
+            return true;
+        } else {
+            // If no number was accumulated, treat as single j/k
+            ExecuteVimNavigation(1, ch);
+            ClearVimCommandBuffer();
+            return true;
+        }
+    }
+    
+    // Clear command buffer if we get an invalid character
+    if (vim_command_mode_) {
+        ClearVimCommandBuffer();
+    }
+    
+    return false;
+}
+
+void MainWindow::ExecuteVimNavigation(int count, char direction) {
+    if (direction == 'j') {
+        // Move down
+        ScrollDown(count);
+        last_error_ = "Moved down " + std::to_string(count) + " line" + (count > 1 ? "s" : "");
+    } else if (direction == 'k') {
+        // Move up
+        ScrollUp(count);
+        last_error_ = "Moved up " + std::to_string(count) + " line" + (count > 1 ? "s" : "");
+    }
+}
+
+void MainWindow::ClearVimCommandBuffer() {
+    vim_command_buffer_.clear();
+    vim_command_mode_ = false;
+}
+
+void MainWindow::BackspaceVimCommand() {
+    if (!vim_command_buffer_.empty()) {
+        vim_command_buffer_.pop_back();
+        if (vim_command_buffer_.empty()) {
+            vim_command_mode_ = false;
+            last_error_ = "Vim command cleared";
+        } else {
+            last_error_ = "Vim command: " + vim_command_buffer_ + " (press j/k to execute)";
+        }
     }
 }
 

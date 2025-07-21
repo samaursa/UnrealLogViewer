@@ -2,6 +2,9 @@
 
 #include "component.h"
 #include "filter_panel.h"
+#include "visual_theme_manager.h"
+#include "log_entry_renderer.h"
+#include "relative_line_number_system.h"
 #include "../log_parser/log_parser.h"
 #include "../filter_engine/filter_engine.h"
 #include "../filter_engine/filter_expression.h"
@@ -301,6 +304,13 @@ public:
     void ToggleDetailView();
     bool IsWordWrapEnabled() const { return word_wrap_enabled_; }
     bool IsDetailViewVisible() const { return show_detail_view_; }
+    
+    // Vim-style navigation functionality
+    bool HandleVimStyleNavigation(const std::string& input);
+    void ExecuteVimNavigation(int count, char direction);
+    void ClearVimCommandBuffer();
+    bool IsVimCommandMode() const { return vim_command_mode_; }
+    void BackspaceVimCommand();
 
 private:
     // FTXUI component
@@ -313,6 +323,9 @@ private:
     
     // UI components
     std::unique_ptr<FilterPanel> filter_panel_;
+    std::unique_ptr<VisualThemeManager> visual_theme_manager_;
+    std::unique_ptr<LogEntryRenderer> log_entry_renderer_;
+    std::unique_ptr<RelativeLineNumberSystem> relative_line_system_;
     
     ConfigManager* config_manager_ = nullptr;
     bool owns_config_manager_ = false;
@@ -369,6 +382,10 @@ private:
     
     // Quick filter dialog state
     bool show_quick_filter_dialog_ = false;
+    
+    // Vim-style navigation state
+    std::string vim_command_buffer_;  // Buffer for accumulating vim commands like "5j"
+    bool vim_command_mode_ = false;   // True when accumulating a vim command
     
     // Callbacks
     std::function<void()> exit_callback_;

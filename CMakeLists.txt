@@ -67,6 +67,12 @@ add_library(unreal_log_lib
   lib/ui/main_window.cpp
   lib/ui/filter_panel.h
   lib/ui/filter_panel.cpp
+  lib/ui/visual_theme_manager.h
+  lib/ui/visual_theme_manager.cpp
+  lib/ui/log_entry_renderer.h
+  lib/ui/log_entry_renderer.cpp
+  lib/ui/relative_line_number_system.h
+  lib/ui/relative_line_number_system.cpp
 )
 
 # Set library properties
@@ -109,6 +115,9 @@ add_executable(unreal_log_tests
   tests/test_result.cpp
   tests/test_config_manager.cpp
   tests/test_main_window.cpp
+  tests/test_visual_theme_manager.cpp
+  tests/test_log_entry_renderer.cpp
+  tests/test_relative_line_number_system.cpp
 )
 
 # Link test application dependencies
@@ -134,6 +143,19 @@ endif()
 # Enable testing
 enable_testing()
 add_test(NAME unreal_log_unit_tests COMMAND unreal_log_tests)
+
+# Create a simple badge test executable
+add_executable(test_simple_badge
+  test_simple_badge.cpp
+)
+
+# Link simple badge test dependencies
+target_link_libraries(test_simple_badge
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
 
 # Install targets
 install(TARGETS unreal_log_viewer DESTINATION bin)
