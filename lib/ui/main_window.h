@@ -222,6 +222,18 @@ public:
     void ConfirmSearch();
     void BackspaceSearch();
     
+    // In-line search functionality (CTRL+L)
+    void ShowInlineSearch();
+    void HideInlineSearch();
+    void AppendToInlineSearch(const std::string& text);
+    void BackspaceInlineSearch();
+    void ConfirmInlineSearch();
+    void FindNextInlineMatch();
+    void FindPreviousInlineMatch();
+    void UpdateInlineSearchResults();
+    bool IsInlineSearchActive() const { return show_inline_search_; }
+    bool IsInlineSearchInputMode() const { return inline_search_input_mode_; }
+    
     // Contextual filtering
     void ShowContextualFilterDialog();
     void HideContextualFilterDialog();
@@ -231,6 +243,19 @@ public:
     // Search promotion dialog
     bool IsSearchPromotionDialogActive() const { return show_search_promotion_; }
     void CreateFilterFromSearch(FilterConditionType type);
+    
+    // Enhanced search and column filtering
+    void PromoteSearchToColumnFilter(int column_number);
+    void CreateDirectColumnFilter(int column_number);
+    void CreateFilterFromSearchAndColumn(FilterConditionType type, const std::string& search_term);
+    
+    // Direct column filter helper methods
+    void CreateLineNumberFilter(const LogEntry& entry);
+    void CreateTimestampAfterFilter(const LogEntry& entry);
+    void CreateFrameAfterFilter(const LogEntry& entry);
+    void CreateLoggerEqualsFilter(const LogEntry& entry);
+    void CreateLevelEqualsFilter(const LogEntry& entry);
+    void CreateMessageContainsFilter(const LogEntry& entry);
     
     // Search state checking
     bool IsSearchActive() const { return show_search_; }
@@ -319,6 +344,13 @@ private:
     bool show_search_promotion_ = false;
     bool search_input_mode_ = false; // true when typing search, false when navigating results
     
+    // In-line search state (CTRL+L)
+    bool show_inline_search_ = false;
+    bool inline_search_input_mode_ = false;
+    std::string inline_search_query_;
+    std::vector<size_t> inline_search_matches_; // Character positions within the current line
+    size_t current_inline_match_ = 0;
+    
     // Context lines state
     int context_lines_ = 0; // Number of context lines to show around matches
     std::vector<LogEntry> context_entries_; // Filtered entries with context
@@ -374,6 +406,7 @@ private:
     
     // Helper methods
     bool HasUppercaseLetters(const std::string& text) const;
+    ftxui::Element CreateHighlightedMessageElement(const std::string& message) const;
     
     // Enhanced status bar rendering
     ftxui::Element RenderSearchStatusBar() const;

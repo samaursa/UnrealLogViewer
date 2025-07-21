@@ -45,6 +45,103 @@ public:
             return true;
         }
         
+        // Handle in-line search input when in-line search is active AND in input mode
+        if (parent_->IsInlineSearchActive() && parent_->IsInlineSearchInputMode()) {
+            // Only allow ESC, Enter, Backspace, and character input during in-line search
+            if (event == Event::Escape) {
+                parent_->HideInlineSearch();
+                return true;
+            }
+            if (event == Event::Return) {
+                parent_->ConfirmInlineSearch();
+                return true;
+            }
+            if (event == Event::Backspace) {
+                parent_->BackspaceInlineSearch();
+                return true;
+            }
+            if (event.is_character()) {
+                parent_->AppendToInlineSearch(event.character());
+                return true;
+            }
+            // Block all other events during in-line search input mode
+            return true;
+        }
+        
+        // Handle in-line search navigation when in-line search is active but NOT in input mode
+        if (parent_->IsInlineSearchActive() && !parent_->IsInlineSearchInputMode()) {
+            if (event.is_character() && event.character().length() == 1) {
+                char ch = event.character()[0];
+                // Allow n/N for in-line search navigation
+                if (ch == 'n') {
+                    parent_->FindNextInlineMatch();
+                    return true;
+                }
+                if (ch == 'N') {
+                    parent_->FindPreviousInlineMatch();
+                    return true;
+                }
+            }
+            // Allow ESC to cancel in-line search
+            if (event == Event::Escape) {
+                parent_->HideInlineSearch();
+                return true;
+            }
+        }
+
+        // Handle search input when search is active AND in input mode
+        // This MUST come first to prevent other shortcuts from interfering with search input
+        if (parent_->IsSearchActive() && parent_->IsSearchInputMode()) {
+            // Only allow ESC, Enter, Backspace, and character input during search
+            if (event == Event::Escape) {
+                parent_->HideSearch();
+                return true;
+            }
+            if (event == Event::Return) {
+                parent_->ConfirmSearch();
+                return true;
+            }
+            if (event == Event::Backspace) {
+                parent_->BackspaceSearch();
+                return true;
+            }
+            if (event.is_character()) {
+                parent_->AppendToSearch(event.character());
+                return true;
+            }
+            // Block all other events during search input mode
+            return true;
+        }
+        
+        // Handle search promotion when search is active but NOT in input mode (after ENTER)
+        if (parent_->IsSearchActive() && !parent_->IsSearchInputMode()) {
+            // Allow number keys 1-4 for search promotion
+            if (event.is_character() && event.character().length() == 1) {
+                char ch = event.character()[0];
+                if (ch >= '1' && ch <= '4') {
+                    int promotion_type = ch - '1'; // Convert '1'-'4' to 0-3 index
+                    parent_->PromoteSearchToColumnFilter(promotion_type);
+                    return true;
+                }
+                
+                // Allow n/N for search navigation
+                if (ch == 'n') {
+                    parent_->FindNext();
+                    return true;
+                }
+                if (ch == 'N') {
+                    parent_->FindPrevious();
+                    return true;
+                }
+            }
+            
+            // Allow ESC to cancel search
+            if (event == Event::Escape) {
+                parent_->HideSearch();
+                return true;
+            }
+        }
+        
         // Handle quit key
         if (event == Event::Character('q')) {
             std::cout << "Exit event triggered" << std::endl;
@@ -69,27 +166,14 @@ public:
             return true;
         }
         
-        // Handle search input when search is active AND in input mode
-        if (parent_->IsSearchActive() && parent_->IsSearchInputMode()) {
-            // Handle ESC first to exit search
-            if (event == Event::Escape) {
-                parent_->HideSearch();
-                return true;
-            }
-            if (event.is_character()) {
-                parent_->AppendToSearch(event.character());
-                return true;
-            }
-            if (event == Event::Return) {
-                parent_->ConfirmSearch();
-                return true;
-            }
-            if (event == Event::Backspace) {
-                parent_->BackspaceSearch();
-                return true;
-            }
-            if (event == Event::Character('+')) {
-                parent_->PromoteSearchToFilter();
+        // Handle Number shortcuts for column-based filtering (1-5) - only when NOT searching
+        if (event.is_character() && event.character().length() == 1) {
+            char ch = event.character()[0];
+            
+            // Check for number keys 1-5 for column-based filtering
+            if (ch >= '1' && ch <= '5') {
+                int column_number = ch - '1'; // Convert '1'-'5' to 0-4 index
+                parent_->CreateDirectColumnFilter(column_number);
                 return true;
             }
         }
@@ -268,6 +352,12 @@ public:
         if (event == Event::Character(static_cast<char>(6))) { // Ctrl+F (ASCII 6)
             // Ctrl+F for quick filter menu (different from 'f' for toggle)
             parent_->ShowQuickFilterDialog();
+            return true;
+        }
+        
+        // In-line search - CTRL+L (ASCII 12)
+        if (event == Event::Character(static_cast<char>(12))) { // Ctrl+L (ASCII 12)
+            parent_->ShowInlineSearch();
             return true;
         }
         
@@ -992,9 +1082,12 @@ ftxui::Element MainWindow::RenderLogEntry(const LogEntry& entry, bool is_selecte
                            entry.Get_log_level().value() : "N/A";
     row_elements.push_back(text(padString(level_str, 8)));
     
-    // Message column - handle word wrapping
+    // Message column - handle word wrapping and in-line search highlighting
     Element message_element;
-    if (word_wrap_enabled_) {
+    if (is_selected && show_inline_search_ && !inline_search_query_.empty() && !inline_search_matches_.empty()) {
+        // Create highlighted message for in-line search
+        message_element = CreateHighlightedMessageElement(entry.Get_message());
+    } else if (word_wrap_enabled_) {
         message_element = paragraph(entry.Get_message());
     } else {
         message_element = text(entry.Get_message());
@@ -1041,15 +1134,28 @@ ftxui::Element MainWindow::RenderTableHeader() const {
     // Build the header with separate elements to match the row layout
     std::vector<Element> header_elements;
     
+    // Column numbering starts from 0, adjusts based on line numbers visibility
+    int column_index = 0;
+    
     if (show_line_numbers_) {
-        header_elements.push_back(text(padString("Line", 4)) | bold);
+        std::string line_header = "[" + std::to_string(column_index++) + "] Line";
+        header_elements.push_back(text(padString(line_header, 8)) | bold);
     }
     
-    header_elements.push_back(text(padString("Timestamp", 25)) | bold);
-    header_elements.push_back(text(padString("Frame", 5)) | bold);
-    header_elements.push_back(text(padString("Logger", 18)) | bold);
-    header_elements.push_back(text(padString("Level", 8)) | bold);
-    header_elements.push_back(text("Message") | bold | flex);
+    std::string timestamp_header = "[" + std::to_string(column_index++) + "] Timestamp";
+    header_elements.push_back(text(padString(timestamp_header, 29)) | bold);
+    
+    std::string frame_header = "[" + std::to_string(column_index++) + "] Frame";
+    header_elements.push_back(text(padString(frame_header, 9)) | bold);
+    
+    std::string logger_header = "[" + std::to_string(column_index++) + "] Logger";
+    header_elements.push_back(text(padString(logger_header, 22)) | bold);
+    
+    std::string level_header = "[" + std::to_string(column_index++) + "] Level";
+    header_elements.push_back(text(padString(level_header, 12)) | bold);
+    
+    std::string message_header = "[" + std::to_string(column_index++) + "] Message";
+    header_elements.push_back(text(message_header) | bold | flex);
     
     return hbox(header_elements) | inverted;
 }
@@ -1144,17 +1250,22 @@ void MainWindow::ApplyTraditionalFilters() {
     }
     
     if (!has_active_filters) {
-        filtered_entries_ = log_entries_;
+        // No active filters - show all entries or all entries with context
+        if (context_lines_ == 0) {
+            filtered_entries_ = log_entries_;
+        } else {
+            BuildContextEntries(log_entries_);
+        }
     } else {
-        // Apply active filters
+        // Apply active filters with AND logic
         for (const auto& entry : log_entries_) {
-            bool entry_matches = false;
+            bool entry_matches = true; // Start with true for AND logic
             
-            // Check each active filter
+            // Check each active filter - entry must match ALL active filters
             for (const auto& filter : filters) {
-                if (filter->Get_is_active() && filter->Matches(entry)) {
-                    entry_matches = true;
-                    break; // OR logic - if any filter matches, include the entry
+                if (filter->Get_is_active() && !filter->Matches(entry)) {
+                    entry_matches = false;
+                    break; // AND logic - if any filter doesn't match, exclude the entry
                 }
             }
             
@@ -1162,7 +1273,13 @@ void MainWindow::ApplyTraditionalFilters() {
                 matches.push_back(entry);
             }
         }
-        filtered_entries_ = matches;
+        
+        // Apply context lines if needed
+        if (context_lines_ == 0) {
+            filtered_entries_ = matches;
+        } else {
+            BuildContextEntries(matches);
+        }
     }
     
     // Update selection to stay within bounds
@@ -1307,6 +1424,138 @@ void MainWindow::BackspaceSearch() {
             last_error_ = "Search: " + search_query_ + " (Enter to confirm, + to promote, Esc to cancel)";
             PerformSearch(search_query_);
         }
+    }
+}
+
+// In-line search functionality implementations
+void MainWindow::ShowInlineSearch() {
+    if (selected_entry_index_ < 0 || selected_entry_index_ >= static_cast<int>(filtered_entries_.size())) {
+        last_error_ = "No line selected for in-line search";
+        return;
+    }
+    
+    show_inline_search_ = true;
+    inline_search_input_mode_ = true;
+    inline_search_query_.clear();
+    inline_search_matches_.clear();
+    current_inline_match_ = 0;
+    
+    last_error_ = "In-line search: (type to search within current line, Enter to confirm, Esc to cancel)";
+}
+
+void MainWindow::HideInlineSearch() {
+    show_inline_search_ = false;
+    inline_search_input_mode_ = false;
+    inline_search_query_.clear();
+    inline_search_matches_.clear();
+    current_inline_match_ = 0;
+    last_error_.clear();
+}
+
+void MainWindow::AppendToInlineSearch(const std::string& text) {
+    inline_search_query_ += text;
+    UpdateInlineSearchResults();
+    
+    if (inline_search_matches_.empty()) {
+        last_error_ = "In-line search: " + inline_search_query_ + " (no matches in current line)";
+    } else {
+        last_error_ = "In-line search: " + inline_search_query_ + " (" + 
+                     std::to_string(inline_search_matches_.size()) + " matches in current line)";
+    }
+}
+
+void MainWindow::BackspaceInlineSearch() {
+    if (!inline_search_query_.empty()) {
+        inline_search_query_.pop_back();
+        if (inline_search_query_.empty()) {
+            last_error_ = "In-line search: (type to search within current line, Enter to confirm, Esc to cancel)";
+            inline_search_matches_.clear();
+            current_inline_match_ = 0;
+        } else {
+            UpdateInlineSearchResults();
+            if (inline_search_matches_.empty()) {
+                last_error_ = "In-line search: " + inline_search_query_ + " (no matches in current line)";
+            } else {
+                last_error_ = "In-line search: " + inline_search_query_ + " (" + 
+                             std::to_string(inline_search_matches_.size()) + " matches in current line)";
+            }
+        }
+    }
+}
+
+void MainWindow::ConfirmInlineSearch() {
+    if (inline_search_query_.empty()) {
+        HideInlineSearch();
+        return;
+    }
+    
+    inline_search_input_mode_ = false;
+    UpdateInlineSearchResults();
+    
+    if (inline_search_matches_.empty()) {
+        last_error_ = "No matches found in current line";
+    } else {
+        current_inline_match_ = 0;
+        last_error_ = "Found " + std::to_string(inline_search_matches_.size()) + 
+                     " matches in current line. Press n/N to navigate, Esc to exit.";
+    }
+}
+
+void MainWindow::FindNextInlineMatch() {
+    if (inline_search_matches_.empty()) {
+        return;
+    }
+    
+    current_inline_match_ = (current_inline_match_ + 1) % inline_search_matches_.size();
+    last_error_ = "In-line match " + std::to_string(current_inline_match_ + 1) + 
+                 " of " + std::to_string(inline_search_matches_.size()) + 
+                 " (position " + std::to_string(inline_search_matches_[current_inline_match_]) + ")";
+}
+
+void MainWindow::FindPreviousInlineMatch() {
+    if (inline_search_matches_.empty()) {
+        return;
+    }
+    
+    if (current_inline_match_ == 0) {
+        current_inline_match_ = inline_search_matches_.size() - 1;
+    } else {
+        current_inline_match_--;
+    }
+    
+    last_error_ = "In-line match " + std::to_string(current_inline_match_ + 1) + 
+                 " of " + std::to_string(inline_search_matches_.size()) + 
+                 " (position " + std::to_string(inline_search_matches_[current_inline_match_]) + ")";
+}
+
+void MainWindow::UpdateInlineSearchResults() {
+    inline_search_matches_.clear();
+    current_inline_match_ = 0;
+    
+    if (inline_search_query_.empty() || selected_entry_index_ < 0 || 
+        selected_entry_index_ >= static_cast<int>(filtered_entries_.size())) {
+        return;
+    }
+    
+    const auto& entry = filtered_entries_[selected_entry_index_];
+    const std::string& line_text = entry.Get_raw_line();
+    
+    // Smart case sensitivity: case-sensitive if query contains uppercase, case-insensitive if all lowercase
+    bool case_sensitive = HasUppercaseLetters(inline_search_query_);
+    
+    std::string search_text = line_text;
+    std::string search_query = inline_search_query_;
+    
+    if (!case_sensitive) {
+        std::transform(search_text.begin(), search_text.end(), search_text.begin(), ::tolower);
+        std::transform(search_query.begin(), search_query.end(), search_query.begin(), ::tolower);
+    }
+    
+    // Find all occurrences
+    size_t pos = 0;
+    while ((pos = search_text.find(search_query, pos)) != std::string::npos) {
+        inline_search_matches_.push_back(pos);
+        pos += search_query.length();
     }
 }
 
@@ -1770,7 +2019,7 @@ void MainWindow::IncreaseContext() {
         else if (context_lines_ == 3) context_lines_ = 5;
         else if (context_lines_ == 5) context_lines_ = 10;
         
-        ApplyCurrentFilter();
+        OnFiltersChanged();
         last_error_ = "Context lines: ±" + std::to_string(context_lines_);
     }
 }
@@ -1781,20 +2030,20 @@ void MainWindow::DecreaseContext() {
         else if (context_lines_ == 5) context_lines_ = 3;
         else if (context_lines_ <= 3) context_lines_--;
         
-        ApplyCurrentFilter();
+        OnFiltersChanged();
         last_error_ = context_lines_ == 0 ? "Context lines: None" : "Context lines: ±" + std::to_string(context_lines_);
     }
 }
 
 void MainWindow::SetContextLines(int lines) {
     context_lines_ = std::max(0, std::min(10, lines));
-    ApplyCurrentFilter();
+    OnFiltersChanged();
     last_error_ = context_lines_ == 0 ? "Context lines: None" : "Context lines: ±" + std::to_string(context_lines_);
 }
 
 void MainWindow::ClearContext() {
     context_lines_ = 0;
-    ApplyCurrentFilter();
+    OnFiltersChanged();
     last_error_ = "Context lines cleared";
 }
 
@@ -1803,6 +2052,48 @@ bool MainWindow::HasUppercaseLetters(const std::string& text) const {
     return std::any_of(text.begin(), text.end(), [](char c) {
         return std::isupper(c);
     });
+}
+
+ftxui::Element MainWindow::CreateHighlightedMessageElement(const std::string& message) const {
+    using namespace ftxui;
+    
+    if (inline_search_matches_.empty() || inline_search_query_.empty()) {
+        return text(message);
+    }
+    
+    std::vector<Element> elements;
+    size_t last_pos = 0;
+    
+    // Create highlighted segments
+    for (size_t match_pos : inline_search_matches_) {
+        // Add text before the match
+        if (match_pos > last_pos) {
+            std::string before_match = message.substr(last_pos, match_pos - last_pos);
+            elements.push_back(text(before_match));
+        }
+        
+        // Add highlighted match
+        std::string match_text = message.substr(match_pos, inline_search_query_.length());
+        Element highlighted_match = text(match_text) | bgcolor(Color::Yellow) | color(Color::Black);
+        
+        // If this is the current match, make it even more prominent
+        if (!inline_search_matches_.empty() && 
+            current_inline_match_ < inline_search_matches_.size() && 
+            match_pos == inline_search_matches_[current_inline_match_]) {
+            highlighted_match = highlighted_match | bold | bgcolor(Color::YellowLight);
+        }
+        
+        elements.push_back(highlighted_match);
+        last_pos = match_pos + inline_search_query_.length();
+    }
+    
+    // Add remaining text after the last match
+    if (last_pos < message.length()) {
+        std::string after_matches = message.substr(last_pos);
+        elements.push_back(text(after_matches));
+    }
+    
+    return hbox(elements);
 }
 
 ftxui::Element MainWindow::RenderSearchStatusBar() const {
@@ -2112,6 +2403,319 @@ void MainWindow::JumpToPreviousWarning() {
     }
     
     last_error_ = "No warning entries found";
+}
+
+void MainWindow::CreateLineNumberFilter(const LogEntry& entry) {
+    // Line number filters don't make much sense, so we'll create a "from this line onward" filter
+    // This is more of a navigation aid than a true filter
+    size_t line_num = entry.Get_line_number();
+    last_error_ = "Line number filter not implemented - use navigation instead (line " + std::to_string(line_num) + ")";
+}
+
+void MainWindow::CreateTimestampAfterFilter(const LogEntry& entry) {
+    if (!entry.HasTimestamp()) {
+        last_error_ = "Selected entry has no timestamp value";
+        return;
+    }
+    
+    std::string timestamp = entry.Get_timestamp().value();
+    
+    // Create a text contains filter that matches entries with this timestamp
+    // Note: This is a simplified implementation since TimeRange isn't fully implemented
+    std::string filter_name = "Timestamp: " + timestamp;
+    auto filter = std::make_unique<Filter>(filter_name, FilterType::TextContains, timestamp);
+    
+    // Add the filter to the filter engine
+    auto result = filter_engine_->AddFilter(std::move(filter));
+    if (result.IsError()) {
+        last_error_ = "Failed to create timestamp filter: " + result.Get_error_message();
+        return;
+    }
+    
+    // Debug: Check filter count (can be removed later)
+    // std::cout << "Filter added. Total filters: " << filter_engine_->GetFilterCount() << std::endl;
+    
+    // Refresh the filter panel to show the new filter
+    if (filter_panel_) {
+        filter_panel_->RefreshFilters();
+    }
+    
+    // Apply filters to update the display
+    OnFiltersChanged();
+    
+    last_error_ = "Created timestamp filter: " + timestamp;
+}
+
+void MainWindow::CreateFrameAfterFilter(const LogEntry& entry) {
+    if (!entry.HasFrameNumber()) {
+        last_error_ = "Selected entry has no frame number value";
+        return;
+    }
+    
+    int frame = entry.Get_frame_number().value();
+    
+    // Create a text contains filter that matches entries with this frame number
+    std::string filter_name = "Frame: " + std::to_string(frame);
+    auto filter = std::make_unique<Filter>(filter_name, FilterType::TextContains, std::to_string(frame));
+    
+    // Add the filter to the filter engine
+    auto result = filter_engine_->AddFilter(std::move(filter));
+    if (result.IsError()) {
+        last_error_ = "Failed to create frame filter: " + result.Get_error_message();
+        return;
+    }
+    
+    // Refresh the filter panel to show the new filter
+    if (filter_panel_) {
+        filter_panel_->RefreshFilters();
+    }
+    
+    // Apply filters to update the display
+    OnFiltersChanged();
+    
+    last_error_ = "Created frame filter: " + std::to_string(frame);
+}
+
+void MainWindow::CreateLoggerEqualsFilter(const LogEntry& entry) {
+    std::string logger = entry.Get_logger_name();
+    if (logger.empty()) {
+        last_error_ = "Selected entry has no logger name";
+        return;
+    }
+    
+    // Create a logger name filter
+    std::string filter_name = "Logger: " + logger;
+    auto filter = std::make_unique<Filter>(filter_name, FilterType::LoggerName, logger);
+    
+    // Add the filter to the filter engine
+    auto result = filter_engine_->AddFilter(std::move(filter));
+    if (result.IsError()) {
+        last_error_ = "Failed to create logger filter: " + result.Get_error_message();
+        return;
+    }
+    
+    // Refresh the filter panel to show the new filter
+    if (filter_panel_) {
+        filter_panel_->RefreshFilters();
+    }
+    
+    // Apply filters to update the display
+    OnFiltersChanged();
+    
+    last_error_ = "Created logger filter: " + logger;
+}
+
+void MainWindow::CreateLevelEqualsFilter(const LogEntry& entry) {
+    if (!entry.HasLogLevel()) {
+        last_error_ = "Selected entry has no log level value";
+        return;
+    }
+    
+    std::string level = entry.Get_log_level().value();
+    
+    // Create a log level filter
+    std::string filter_name = "Level: " + level;
+    auto filter = std::make_unique<Filter>(filter_name, FilterType::LogLevel, level);
+    
+    // Add the filter to the filter engine
+    auto result = filter_engine_->AddFilter(std::move(filter));
+    if (result.IsError()) {
+        last_error_ = "Failed to create level filter: " + result.Get_error_message();
+        return;
+    }
+    
+    // Refresh the filter panel to show the new filter
+    if (filter_panel_) {
+        filter_panel_->RefreshFilters();
+    }
+    
+    // Apply filters to update the display
+    OnFiltersChanged();
+    
+    last_error_ = "Created level filter: " + level;
+}
+
+void MainWindow::CreateMessageContainsFilter(const LogEntry& entry) {
+    std::string message = entry.Get_message();
+    if (message.empty()) {
+        last_error_ = "Selected entry has no message content";
+        return;
+    }
+    
+    // For message filters, we'll use the first few words to avoid overly specific filters
+    std::string filter_text = message;
+    if (message.length() > 50) {
+        size_t space_pos = message.find(' ', 30);
+        if (space_pos != std::string::npos) {
+            filter_text = message.substr(0, space_pos);
+        }
+    }
+    
+    // Create a text contains filter for the message
+    std::string filter_name = "Message: \"" + filter_text + "\"";
+    auto filter = std::make_unique<Filter>(filter_name, FilterType::TextContains, filter_text);
+    
+    // Add the filter to the filter engine
+    auto result = filter_engine_->AddFilter(std::move(filter));
+    if (result.IsError()) {
+        last_error_ = "Failed to create message filter: " + result.Get_error_message();
+        return;
+    }
+    
+    // Refresh the filter panel to show the new filter
+    if (filter_panel_) {
+        filter_panel_->RefreshFilters();
+    }
+    
+    // Apply filters to update the display
+    OnFiltersChanged();
+    
+    last_error_ = "Created message filter: \"" + filter_text + "\"";
+}
+
+void MainWindow::PromoteSearchToColumnFilter(int column_number) {
+    // Debug: Check search state
+    std::cout << "Search active: " << IsSearchActive() << ", Query: '" << search_query_ << "'" << std::endl;
+    
+    if (!IsSearchActive() || search_query_.empty()) {
+        last_error_ = "No active search to promote to filter (query: '" + search_query_ + "')";
+        return;
+    }
+    
+    // Store the search query before it gets cleared
+    std::string current_search_query = search_query_;
+    
+    // Map column numbers to filter types for search promotion
+    // Key 1: Message Contains, Key 2: LogLevel equals, Key 3: Logger Contains, Key 4: Any Field Contains
+    FilterConditionType filter_type;
+    std::string filter_description;
+    
+    switch (column_number) {
+        case 0: // Key 1 - Message contains
+            filter_type = FilterConditionType::MessageContains;
+            filter_description = "Message contains";
+            break;
+        case 1: // Key 2 - LogLevel equals
+            filter_type = FilterConditionType::LogLevelEquals;
+            filter_description = "LogLevel equals";
+            break;
+        case 2: // Key 3 - Logger contains
+            filter_type = FilterConditionType::LoggerContains;
+            filter_description = "Logger contains";
+            break;
+        case 3: // Key 4 - Any field contains
+            filter_type = FilterConditionType::AnyFieldContains;
+            filter_description = "Any field contains";
+            break;
+        default:
+            last_error_ = "Invalid search promotion option: " + std::to_string(column_number + 1);
+            return;
+    }
+    
+    // Create the filter from the current search term
+    CreateFilterFromSearchAndColumn(filter_type, current_search_query);
+    
+    // Clear the search since it's now been promoted to a filter
+    HideSearch();
+    
+    last_error_ = "Created filter: " + filter_description + " \"" + current_search_query + "\"";
+}
+
+void MainWindow::CreateDirectColumnFilter(int column_number) {
+    // Check if we have a selected entry
+    if (selected_entry_index_ < 0 || selected_entry_index_ >= static_cast<int>(filtered_entries_.size())) {
+        last_error_ = "No entry selected for column filter";
+        return;
+    }
+    
+    const auto& selected_entry = filtered_entries_[selected_entry_index_];
+    
+    // Adjust column number based on line numbers visibility
+    int actual_column = column_number;
+    if (!show_line_numbers_ && column_number > 0) {
+        actual_column = column_number - 1; // Shift down if line numbers are hidden
+    }
+    
+    // Create filter based on column (1-based numbering to match headers)
+    // Key 1 = Timestamp, Key 2 = Frame, Key 3 = Logger, Key 4 = Level, Key 5 = Message
+    switch (column_number) {
+        case 0: // Key 1 - Timestamp column
+            CreateTimestampAfterFilter(selected_entry);
+            break;
+        case 1: // Key 2 - Frame column
+            CreateFrameAfterFilter(selected_entry);
+            break;
+        case 2: // Key 3 - Logger column
+            CreateLoggerEqualsFilter(selected_entry);
+            break;
+        case 3: // Key 4 - Level column
+            CreateLevelEqualsFilter(selected_entry);
+            break;
+        case 4: // Key 5 - Message column
+            CreateMessageContainsFilter(selected_entry);
+            break;
+        default:
+            last_error_ = "Invalid column number: " + std::to_string(column_number + 1);
+            break;
+    }
+}
+
+void MainWindow::CreateFilterFromSearchAndColumn(FilterConditionType type, const std::string& search_term) {
+    if (search_term.empty()) {
+        last_error_ = "Cannot create filter with empty search term";
+        return;
+    }
+    
+    // Map FilterConditionType to FilterType and create appropriate filter
+    std::string filter_name;
+    FilterType filter_type_enum;
+    std::string type_description;
+    
+    switch (type) {
+        case FilterConditionType::AnyFieldContains:
+            filter_name = "Any field contains: " + search_term;
+            filter_type_enum = FilterType::TextContains;
+            type_description = "Any field contains";
+            break;
+        case FilterConditionType::MessageContains:
+            filter_name = "Message contains: " + search_term;
+            filter_type_enum = FilterType::TextContains;
+            type_description = "Message contains";
+            break;
+        case FilterConditionType::LoggerContains:
+            filter_name = "Logger contains: " + search_term;
+            filter_type_enum = FilterType::LoggerName;
+            type_description = "Logger contains";
+            break;
+        case FilterConditionType::LogLevelEquals:
+            filter_name = "Level equals: " + search_term;
+            filter_type_enum = FilterType::LogLevel;
+            type_description = "Level equals";
+            break;
+        default:
+            last_error_ = "Unknown filter type";
+            return;
+    }
+    
+    // Create the filter
+    auto filter = std::make_unique<Filter>(filter_name, filter_type_enum, search_term);
+    
+    // Add the filter to the filter engine
+    auto result = filter_engine_->AddFilter(std::move(filter));
+    if (result.IsError()) {
+        last_error_ = "Failed to create filter: " + result.Get_error_message();
+        return;
+    }
+    
+    // Refresh the filter panel to show the new filter
+    if (filter_panel_) {
+        filter_panel_->RefreshFilters();
+    }
+    
+    // Apply filters to update the display
+    OnFiltersChanged();
+    
+    last_error_ = "Filter created: " + type_description + " \"" + search_term + "\"";
 }
 
 } // namespace ue_log
