@@ -18,11 +18,13 @@ public:
      */
     struct ColumnSpacing {
         int line_number_width = 6;      // "  123 " or " +12 " for relative
-        int timestamp_width = 12;       // "12:34:56.789"
+        int timestamp_width = 15;       // "12:34:56.789000" - increased for better readability
         int frame_width = 8;           // " [12345]"
-        int logger_badge_width = 20;   // "[LoggerName    ]"
+        int logger_badge_width = 18;   // "[LoggerName   ]" - slightly reduced for better balance
         int level_width = 8;           // " ERROR  "
-        int column_padding = 2;        // Spaces between columns
+        int column_padding = 2;        // Spaces between columns (deprecated - now using visual separators)
+        bool use_visual_separators = true;  // Use │ characters between columns
+        bool align_numbers_right = true;    // Right-align numeric columns (line, frame)
     };
 
     /**
@@ -83,6 +85,18 @@ public:
      * @param spacing New column spacing configuration
      */
     void SetColumnSpacing(const ColumnSpacing& spacing);
+    
+    /**
+     * Get the visual separator string for columns.
+     * @return String to use as column separator
+     */
+    std::string GetColumnSeparator() const;
+    
+    /**
+     * Enable or disable visual column separators.
+     * @param enabled True to enable visual separators, false to use spacing only
+     */
+    void SetVisualSeparatorsEnabled(bool enabled);
 
     // Utility methods
     

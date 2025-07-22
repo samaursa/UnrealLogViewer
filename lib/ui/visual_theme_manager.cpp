@@ -47,16 +47,29 @@ ftxui::Color VisualThemeManager::AssignLoggerColor(const std::string& logger_nam
 }
 
 ftxui::Color VisualThemeManager::GetLogLevelColor(const std::string& log_level) const {
+    // Handle Unreal Engine specific log levels
     if (log_level == "Error") {
         return ftxui::Color::RedLight;
     } else if (log_level == "Warning") {
         return ftxui::Color::YellowLight;
-    } else if (log_level == "Info") {
+    } else if (log_level == "Display") {
+        return ftxui::Color::White;
+    } else if (log_level == "Verbose") {
+        return ftxui::Color::GrayLight;
+    } else if (log_level == "VeryVerbose") {
+        return ftxui::Color::GrayDark;
+    } else if (log_level == "Trace") {
+        return ftxui::Color::CyanLight;
+    }
+    
+    // Fallback for generic log levels (for backward compatibility)
+    if (log_level == "Info") {
         return ftxui::Color::White;
     } else if (log_level == "Debug") {
         return ftxui::Color::GrayLight;
     }
-    return ftxui::Color::White; // Default color
+    
+    return ftxui::Color::White; // Default color for unknown levels
 }
 
 ftxui::Color VisualThemeManager::GetBackgroundColor() const {
@@ -86,6 +99,18 @@ void VisualThemeManager::ResetLoggerColors() {
 
 size_t VisualThemeManager::GetAvailableLoggerColorCount() const {
     return logger_color_palette_.size();
+}
+
+std::string VisualThemeManager::GetColumnSeparator() const {
+    if (column_spacing_.use_visual_separators) {
+        return " │ ";
+    } else {
+        return std::string(column_spacing_.column_padding, ' ');
+    }
+}
+
+void VisualThemeManager::SetVisualSeparatorsEnabled(bool enabled) {
+    column_spacing_.use_visual_separators = enabled;
 }
 
 } // namespace ue_log

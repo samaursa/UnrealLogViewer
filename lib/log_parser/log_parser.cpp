@@ -123,7 +123,21 @@ namespace ue_log {
     }
     
     bool LogParser::IsStructuredFormat(const std::string& line) {
-        return std::regex_match(line, structured_pattern);
+        if (!std::regex_match(line, structured_pattern)) {
+            return false;
+        }
+        
+        // Additional validation: check if it contains a valid Unreal log level
+        std::smatch match;
+        if (std::regex_match(line, match, structured_pattern)) {
+            std::string potential_level = match[4].str();
+            // Only consider it structured if it has a valid Unreal log level
+            return potential_level == "Display" || potential_level == "Warning" || 
+                   potential_level == "Error" || potential_level == "Verbose" || 
+                   potential_level == "VeryVerbose" || potential_level == "Trace";
+        }
+        
+        return false;
     }
     
     bool LogParser::IsSemiStructuredFormat(const std::string& line) {
@@ -160,21 +174,30 @@ namespace ue_log {
         
         if (std::regex_match(line, match, structured_pattern)) {
             // Extract components using regex groups
-            // Pattern: \[([^\]]+)\]\[(\d+)\]([^:]+):\s*([^:]+):\s*(.+)
-            // Groups: 1=timestamp, 2=frame, 3=logger, 4=level, 5=message
+            // Pattern: \[([^\]]+)\]\[\s*(\d+)\s*\]([^:]+):\s*([^:]+):\s*(.+)
+            // Groups: 1=timestamp, 2=frame, 3=logger, 4=potential_level, 5=message
             
             std::string timestamp = match[1].str();
             int frame_number = std::stoi(match[2].str());
             std::string logger_name = match[3].str();
-            std::string log_level = match[4].str();
+            std::string potential_level = match[4].str();
             std::string message = match[5].str();
+            
+            // Validate if the potential level is actually a valid Unreal log level
+            std::optional<std::string> validated_level = ExtractLogLevel(line, LogEntryType::Structured);
+            
+            // If the potential level is not valid, treat it as part of the message
+            if (!validated_level.has_value()) {
+                // Reconstruct message to include the invalid "level"
+                message = potential_level + ": " + message;
+            }
             
             return LogEntry(
                 LogEntryType::Structured,
                 timestamp,
                 frame_number,
                 logger_name,
-                log_level,
+                validated_level,
                 message,
                 line,
                 line_number
@@ -220,18 +243,27 @@ namespace ue_log {
         if (std::regex_match(line, match, unstructured_pattern)) {
             // Extract components using regex groups
             // Pattern: ([^:]+):\s*([^:]+):\s*(.+)
-            // Groups: 1=logger, 2=level, 3=message
+            // Groups: 1=logger, 2=potential_level, 3=message
             
             std::string logger_name = match[1].str();
-            std::string log_level = match[2].str();
+            std::string potential_level = match[2].str();
             std::string message = match[3].str();
+            
+            // Validate if the potential level is actually a valid Unreal log level
+            std::optional<std::string> validated_level = ExtractLogLevel(line, LogEntryType::Unstructured);
+            
+            // If the potential level is not valid, treat it as part of the message
+            if (!validated_level.has_value()) {
+                // Reconstruct message to include the invalid "level"
+                message = potential_level + ": " + message;
+            }
             
             return LogEntry(
                 LogEntryType::Unstructured,
                 std::nullopt, // No timestamp
                 std::nullopt, // No frame number
                 logger_name,
-                log_level,
+                validated_level,
                 message,
                 line,
                 line_number
@@ -333,10 +365,20 @@ namespace ue_log {
     std::optional<std::string> LogParser::ExtractLogLevel(const std::string& line, LogEntryType type) {
         std::smatch match;
         
+        // Helper function to validate if a string is a valid Unreal Engine log level
+        auto isValidUnrealLogLevel = [](const std::string& level) -> bool {
+            return level == "Display" || level == "Warning" || level == "Error" || 
+                   level == "Verbose" || level == "VeryVerbose" || level == "Trace";
+        };
+        
         switch (type) {
             case LogEntryType::Structured:
                 if (std::regex_match(line, match, structured_pattern)) {
-                    return match[4].str();
+                    std::string potential_level = match[4].str();
+                    // Only return if it's a valid Unreal log level
+                    if (isValidUnrealLogLevel(potential_level)) {
+                        return potential_level;
+                    }
                 }
                 break;
             case LogEntryType::SemiStructured:
@@ -344,7 +386,11 @@ namespace ue_log {
                 return std::nullopt;
             case LogEntryType::Unstructured:
                 if (std::regex_match(line, match, unstructured_pattern)) {
-                    return match[2].str();
+                    std::string potential_level = match[2].str();
+                    // Only return if it's a valid Unreal log level
+                    if (isValidUnrealLogLevel(potential_level)) {
+                        return potential_level;
+                    }
                 }
                 break;
         }

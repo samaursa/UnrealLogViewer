@@ -25,19 +25,31 @@ Element LogEntryRenderer::RenderLogEntry(const LogEntry& entry, bool is_selected
     // Line number column (if enabled)
     if (show_line_numbers_) {
         row_elements.push_back(RenderLineNumber(relative_line_number, is_selected));
+        // Add visual separator after line number
+        std::string separator = theme_manager_->GetColumnSeparator();
+        row_elements.push_back(text(separator) | color(Color::GrayDark));
     }
     
     // Timestamp column
     row_elements.push_back(RenderTimestamp(entry));
+    // Add visual separator after timestamp
+    std::string separator = theme_manager_->GetColumnSeparator();
+    row_elements.push_back(text(separator) | color(Color::GrayDark));
     
     // Frame number column
     row_elements.push_back(RenderFrameNumber(entry));
+    // Add visual separator after frame
+    row_elements.push_back(text(separator) | color(Color::GrayDark));
     
     // Logger badge column
     row_elements.push_back(RenderLoggerBadge(entry));
+    // Add visual separator after logger
+    row_elements.push_back(text(separator) | color(Color::GrayDark));
     
     // Log level column
     row_elements.push_back(RenderLogLevel(entry));
+    // Add visual separator after log level
+    row_elements.push_back(text(separator) | color(Color::GrayDark));
     
     // Message column (flexible width)
     row_elements.push_back(RenderMessage(entry, is_selected) | flex);
@@ -62,21 +74,34 @@ Element LogEntryRenderer::RenderTableHeader() const {
         header_elements.push_back(
             text(PadText("Line", spacing.line_number_width)) | bold
         );
+        // Add visual separator after line number header
+        std::string separator = theme_manager_->GetColumnSeparator();
+        header_elements.push_back(text(separator) | color(Color::GrayDark));
     }
     
-    // Column headers
+    // Column headers with separators
+    std::string separator = theme_manager_->GetColumnSeparator();
+    
     header_elements.push_back(
         text(PadText("Timestamp", spacing.timestamp_width)) | bold
     );
+    header_elements.push_back(text(separator) | color(Color::GrayDark));
+    
     header_elements.push_back(
         text(PadText("Frame", spacing.frame_width)) | bold
     );
+    header_elements.push_back(text(separator) | color(Color::GrayDark));
+    
     header_elements.push_back(
         text(PadText("Logger", spacing.logger_badge_width)) | bold
     );
+    header_elements.push_back(text(separator) | color(Color::GrayDark));
+    
     header_elements.push_back(
         text(PadText("Level", spacing.level_width)) | bold
     );
+    header_elements.push_back(text(separator) | color(Color::GrayDark));
+    
     header_elements.push_back(
         text("Message") | bold | flex
     );
@@ -89,16 +114,27 @@ Element LogEntryRenderer::RenderLineNumber(int relative_number, bool is_current)
     
     std::string line_text;
     if (relative_number == 0 && is_current) {
-        line_text = "  0  ";  // Current line indicator
+        line_text = "0";  // Current line indicator
     } else if (relative_number > 0) {
-        line_text = " " + std::to_string(relative_number) + " ";  // No + sign needed for vim users
+        line_text = std::to_string(relative_number);  // No + sign needed for vim users
     } else if (relative_number < 0) {
-        line_text = " " + std::to_string(std::abs(relative_number)) + " ";  // Show absolute value, no - sign needed for vim users
+        line_text = std::to_string(std::abs(relative_number));  // Show absolute value, no - sign needed for vim users
     } else {
-        line_text = "     ";  // Empty for non-relative mode
+        line_text = "";  // Empty for non-relative mode
     }
     
-    Element element = text(PadText(line_text, spacing.line_number_width));
+    // Apply right alignment for numbers if configured
+    Element element;
+    if (spacing.align_numbers_right && !line_text.empty()) {
+        // Right-align the number within the column width
+        int padding_needed = spacing.line_number_width - static_cast<int>(line_text.length());
+        if (padding_needed > 0) {
+            line_text = std::string(padding_needed, ' ') + line_text;
+        }
+        element = text(line_text.substr(0, spacing.line_number_width));
+    } else {
+        element = text(PadText(line_text, spacing.line_number_width));
+    }
     
     if (is_current) {
         element = element | bold | color(theme_manager_->GetHighlightColor());
@@ -113,6 +149,11 @@ Element LogEntryRenderer::RenderTimestamp(const LogEntry& entry) const {
     std::string timestamp_str = entry.Get_timestamp().has_value() ? 
                                entry.Get_timestamp().value() : "N/A";
     
+    // Ensure timestamp fits within the allocated width
+    if (static_cast<int>(timestamp_str.length()) > spacing.timestamp_width) {
+        timestamp_str = TruncateText(timestamp_str, spacing.timestamp_width);
+    }
+    
     return text(PadText(timestamp_str, spacing.timestamp_width));
 }
 
@@ -122,7 +163,17 @@ Element LogEntryRenderer::RenderFrameNumber(const LogEntry& entry) const {
     std::string frame_str = entry.Get_frame_number().has_value() ? 
                            std::to_string(entry.Get_frame_number().value()) : "N/A";
     
-    return text(PadText(frame_str, spacing.frame_width));
+    // Apply right alignment for numbers if configured
+    if (spacing.align_numbers_right && entry.Get_frame_number().has_value()) {
+        // Right-align the number within the column width
+        int padding_needed = spacing.frame_width - static_cast<int>(frame_str.length());
+        if (padding_needed > 0) {
+            frame_str = std::string(padding_needed, ' ') + frame_str;
+        }
+        return text(frame_str.substr(0, spacing.frame_width));
+    } else {
+        return text(PadText(frame_str, spacing.frame_width));
+    }
 }
 
 Element LogEntryRenderer::RenderLoggerBadge(const LogEntry& entry) const {

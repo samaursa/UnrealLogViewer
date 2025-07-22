@@ -118,6 +118,7 @@ add_executable(unreal_log_tests
   tests/test_visual_theme_manager.cpp
   tests/test_log_entry_renderer.cpp
   tests/test_relative_line_number_system.cpp
+  tests/test_column_spacing.cpp
 )
 
 # Link test application dependencies
@@ -151,6 +152,32 @@ add_executable(test_simple_badge
 
 # Link simple badge test dependencies
 target_link_libraries(test_simple_badge
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a column spacing demo executable
+add_executable(test_column_spacing_demo
+  test_column_spacing_demo.cpp
+)
+
+# Link column spacing demo dependencies
+target_link_libraries(test_column_spacing_demo
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create an Unreal log levels test executable
+add_executable(test_unreal_log_levels
+  test_unreal_log_levels.cpp
+)
+
+# Link Unreal log levels test dependencies
+target_link_libraries(test_unreal_log_levels
   PRIVATE unreal_log_lib
   PRIVATE ftxui::screen
   PRIVATE ftxui::dom
