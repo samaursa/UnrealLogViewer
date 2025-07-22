@@ -119,6 +119,7 @@ add_executable(unreal_log_tests
   tests/test_log_entry_renderer.cpp
   tests/test_relative_line_number_system.cpp
   tests/test_column_spacing.cpp
+  tests/test_visual_hierarchy_comprehensive.cpp
 )
 
 # Link test application dependencies
@@ -178,6 +179,19 @@ add_executable(test_unreal_log_levels
 
 # Link Unreal log levels test dependencies
 target_link_libraries(test_unreal_log_levels
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a visual hierarchy test executable
+add_executable(test_visual_hierarchy
+  test_visual_hierarchy.cpp
+)
+
+# Link visual hierarchy test dependencies
+target_link_libraries(test_visual_hierarchy
   PRIVATE unreal_log_lib
   PRIVATE ftxui::screen
   PRIVATE ftxui::dom

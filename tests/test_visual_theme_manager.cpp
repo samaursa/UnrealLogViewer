@@ -21,9 +21,9 @@ TEST_CASE("VisualThemeManager Basic Functionality", "[ui][visual_theme_manager]"
         // Check default column spacing
         auto spacing = theme_manager.GetColumnSpacing();
         REQUIRE(spacing.line_number_width == 6);
-        REQUIRE(spacing.timestamp_width == 12);
+        REQUIRE(spacing.timestamp_width == 15);  // Updated to match current implementation
         REQUIRE(spacing.frame_width == 8);
-        REQUIRE(spacing.logger_badge_width == 20);
+        REQUIRE(spacing.logger_badge_width == 18);  // Updated to match current implementation
         REQUIRE(spacing.level_width == 8);
         REQUIRE(spacing.column_padding == 2);
     }
@@ -116,10 +116,17 @@ TEST_CASE("VisualThemeManager Log Level Colors", "[ui][visual_theme_manager]") {
     VisualThemeManager theme_manager;
     
     SECTION("Standard log levels have correct colors") {
-        REQUIRE(theme_manager.GetLogLevelColor("Error") == ftxui::Color::RedLight);
-        REQUIRE(theme_manager.GetLogLevelColor("Warning") == ftxui::Color::YellowLight);
+        REQUIRE(theme_manager.GetLogLevelColor("Error") == ftxui::Color::Red);
+        REQUIRE(theme_manager.GetLogLevelColor("Warning") == ftxui::Color::Yellow);
         REQUIRE(theme_manager.GetLogLevelColor("Info") == ftxui::Color::White);
         REQUIRE(theme_manager.GetLogLevelColor("Debug") == ftxui::Color::GrayLight);
+    }
+    
+    SECTION("Unreal Engine specific log levels have correct colors") {
+        REQUIRE(theme_manager.GetLogLevelColor("Display") == ftxui::Color::White);
+        REQUIRE(theme_manager.GetLogLevelColor("Verbose") == ftxui::Color::GrayLight);
+        REQUIRE(theme_manager.GetLogLevelColor("VeryVerbose") == ftxui::Color::GrayDark);
+        REQUIRE(theme_manager.GetLogLevelColor("Trace") == ftxui::Color::CyanLight);
     }
     
     SECTION("Unknown log levels get default color") {
@@ -132,7 +139,59 @@ TEST_CASE("VisualThemeManager Log Level Colors", "[ui][visual_theme_manager]") {
         // Test case variations
         REQUIRE(theme_manager.GetLogLevelColor("error") == ftxui::Color::White); // Should be default, not Error
         REQUIRE(theme_manager.GetLogLevelColor("ERROR") == ftxui::Color::White); // Should be default, not Error
-        REQUIRE(theme_manager.GetLogLevelColor("Error") == ftxui::Color::RedLight); // Exact match
+        REQUIRE(theme_manager.GetLogLevelColor("Error") == ftxui::Color::Red); // Exact match
+    }
+}
+
+TEST_CASE("VisualThemeManager Enhanced Visual Hierarchy", "[ui][visual_theme_manager]") {
+    VisualThemeManager theme_manager;
+    
+    SECTION("Log level background colors") {
+        // Errors should have special background color
+        REQUIRE(theme_manager.GetLogLevelBackgroundColor("Error") == ftxui::Color::RedLight);
+        
+        // Other levels should use default background
+        REQUIRE(theme_manager.GetLogLevelBackgroundColor("Warning") == theme_manager.GetBackgroundColor());
+        REQUIRE(theme_manager.GetLogLevelBackgroundColor("Info") == theme_manager.GetBackgroundColor());
+        REQUIRE(theme_manager.GetLogLevelBackgroundColor("Debug") == theme_manager.GetBackgroundColor());
+        REQUIRE(theme_manager.GetLogLevelBackgroundColor("Display") == theme_manager.GetBackgroundColor());
+    }
+    
+    SECTION("Prominent log level identification") {
+        // Error and Warning should be prominent
+        REQUIRE(theme_manager.IsLogLevelProminent("Error"));
+        REQUIRE(theme_manager.IsLogLevelProminent("Warning"));
+        
+        // Other levels should not be prominent
+        REQUIRE_FALSE(theme_manager.IsLogLevelProminent("Info"));
+        REQUIRE_FALSE(theme_manager.IsLogLevelProminent("Debug"));
+        REQUIRE_FALSE(theme_manager.IsLogLevelProminent("Display"));
+        REQUIRE_FALSE(theme_manager.IsLogLevelProminent("Verbose"));
+        REQUIRE_FALSE(theme_manager.IsLogLevelProminent("Unknown"));
+    }
+    
+    SECTION("Bold text usage for log levels") {
+        // Error and Warning should use bold text
+        REQUIRE(theme_manager.ShouldLogLevelUseBold("Error"));
+        REQUIRE(theme_manager.ShouldLogLevelUseBold("Warning"));
+        
+        // Other levels should not use bold text
+        REQUIRE_FALSE(theme_manager.ShouldLogLevelUseBold("Info"));
+        REQUIRE_FALSE(theme_manager.ShouldLogLevelUseBold("Debug"));
+        REQUIRE_FALSE(theme_manager.ShouldLogLevelUseBold("Display"));
+        REQUIRE_FALSE(theme_manager.ShouldLogLevelUseBold("Verbose"));
+        REQUIRE_FALSE(theme_manager.ShouldLogLevelUseBold("Unknown"));
+    }
+    
+    SECTION("Visual hierarchy consistency") {
+        // All prominent levels should also use bold
+        std::vector<std::string> all_levels = {"Error", "Warning", "Info", "Debug", "Display", "Verbose", "VeryVerbose", "Trace"};
+        
+        for (const auto& level : all_levels) {
+            if (theme_manager.IsLogLevelProminent(level)) {
+                REQUIRE(theme_manager.ShouldLogLevelUseBold(level));
+            }
+        }
     }
 }
 

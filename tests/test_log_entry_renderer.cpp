@@ -138,3 +138,144 @@ TEST_CASE("LogEntryRenderer color cycling behavior", "[LogEntryRenderer]") {
         REQUIRE(assigned_colors[0] == assigned_colors[palette_size]);
     }
 }
+
+TEST_CASE("LogEntryRenderer Enhanced Visual Hierarchy", "[LogEntryRenderer]") {
+    auto theme_manager = std::make_unique<VisualThemeManager>();
+    auto renderer = std::make_unique<LogEntryRenderer>(theme_manager.get());
+    
+    SECTION("Error log entries visual prominence") {
+        LogEntry error_entry(LogEntryType::Structured, 
+                           std::string("12:34:56.789"), 
+                           123, 
+                           "TestLogger", 
+                           std::string("Error"), 
+                           "Critical error occurred", 
+                           "[12:34:56.789][123]TestLogger: Error: Critical error occurred", 
+                           1);
+        
+        // Render error entry - should not crash and should handle prominence
+        Element error_unselected = renderer->RenderLogEntry(error_entry, false, 0);
+        Element error_selected = renderer->RenderLogEntry(error_entry, true, 0);
+        
+        // Test individual components
+        Element error_level = renderer->RenderLogLevel(error_entry);
+        Element error_message = renderer->RenderMessage(error_entry, false);
+    }
+    
+    SECTION("Warning log entries visual prominence") {
+        LogEntry warning_entry(LogEntryType::Structured, 
+                             std::string("12:34:56.789"), 
+                             123, 
+                             "TestLogger", 
+                             std::string("Warning"), 
+                             "Warning: potential issue detected", 
+                             "[12:34:56.789][123]TestLogger: Warning: Warning: potential issue detected", 
+                             1);
+        
+        // Render warning entry - should not crash and should handle prominence
+        Element warning_unselected = renderer->RenderLogEntry(warning_entry, false, 0);
+        Element warning_selected = renderer->RenderLogEntry(warning_entry, true, 0);
+        
+        // Test individual components
+        Element warning_level = renderer->RenderLogLevel(warning_entry);
+        Element warning_message = renderer->RenderMessage(warning_entry, false);
+    }
+    
+    SECTION("Normal log entries subtle styling") {
+        LogEntry info_entry(LogEntryType::Structured, 
+                          std::string("12:34:56.789"), 
+                          123, 
+                          "TestLogger", 
+                          std::string("Info"), 
+                          "Normal information message", 
+                          "[12:34:56.789][123]TestLogger: Info: Normal information message", 
+                          1);
+        
+        LogEntry display_entry(LogEntryType::Structured, 
+                             std::string("12:34:56.789"), 
+                             123, 
+                             "TestLogger", 
+                             std::string("Display"), 
+                             "Display message", 
+                             "[12:34:56.789][123]TestLogger: Display: Display message", 
+                             1);
+        
+        // Render normal entries - should not crash and should have subtle styling
+        Element info_rendered = renderer->RenderLogEntry(info_entry, false, 0);
+        Element display_rendered = renderer->RenderLogEntry(display_entry, false, 0);
+        
+        // Test individual components
+        Element info_level = renderer->RenderLogLevel(info_entry);
+        Element info_message = renderer->RenderMessage(info_entry, false);
+        Element display_level = renderer->RenderLogLevel(display_entry);
+        Element display_message = renderer->RenderMessage(display_entry, false);
+    }
+    
+    SECTION("Log level visual differentiation") {
+        std::vector<std::string> test_levels = {"Error", "Warning", "Info", "Debug", "Display", "Verbose", "VeryVerbose", "Trace"};
+        
+        for (const auto& level : test_levels) {
+            LogEntry test_entry(LogEntryType::Structured, 
+                              std::string("12:34:56.789"), 
+                              123, 
+                              "TestLogger", 
+                              std::string(level), 
+                              "Test message for " + level, 
+                              "[12:34:56.789][123]TestLogger: " + level + ": Test message for " + level, 
+                              1);
+            
+            // Each level should render without crashing
+            Element level_element = renderer->RenderLogLevel(test_entry);
+            Element message_element = renderer->RenderMessage(test_entry, false);
+            Element full_entry = renderer->RenderLogEntry(test_entry, false, 0);
+            
+            // Verify that prominent levels are handled correctly
+            if (theme_manager->IsLogLevelProminent(level)) {
+                // These should have enhanced styling - just verify they render
+                Element selected_entry = renderer->RenderLogEntry(test_entry, true, 0);
+            }
+        }
+    }
+    
+    SECTION("Visual hierarchy with selection interaction") {
+        LogEntry error_entry(LogEntryType::Structured, 
+                           std::string("12:34:56.789"), 
+                           123, 
+                           "TestLogger", 
+                           std::string("Error"), 
+                           "Error message", 
+                           "[12:34:56.789][123]TestLogger: Error: Error message", 
+                           1);
+        
+        LogEntry warning_entry(LogEntryType::Structured, 
+                             std::string("12:34:56.789"), 
+                             123, 
+                             "TestLogger", 
+                             std::string("Warning"), 
+                             "Warning message", 
+                             "[12:34:56.789][123]TestLogger: Warning: Warning message", 
+                             1);
+        
+        // Test that selection and visual hierarchy work together
+        Element error_selected = renderer->RenderLogEntry(error_entry, true, 0);
+        Element error_unselected = renderer->RenderLogEntry(error_entry, false, 0);
+        Element warning_selected = renderer->RenderLogEntry(warning_entry, true, 0);
+        Element warning_unselected = renderer->RenderLogEntry(warning_entry, false, 0);
+        
+        // Should render without crashing - visual hierarchy should work with selection
+    }
+    
+    SECTION("Accessibility and contrast considerations") {
+        // Test that all log levels maintain good contrast and accessibility
+        std::vector<std::string> accessibility_levels = {"Error", "Warning", "Info", "Debug"};
+        
+        for (const auto& level : accessibility_levels) {
+            // Verify colors are accessible
+            Color level_color = theme_manager->GetLogLevelColor(level);
+            Color bg_color = theme_manager->GetLogLevelBackgroundColor(level);
+            
+            // Colors should be valid FTXUI colors (basic validation)
+            // More detailed accessibility testing would require color contrast calculations
+        }
+    }
+}

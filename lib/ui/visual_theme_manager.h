@@ -55,6 +55,27 @@ public:
     ftxui::Color GetLogLevelColor(const std::string& log_level) const;
     
     /**
+     * Get background color for a log level (for prominent styling).
+     * @param log_level The log level (Error, Warning, Info, Debug, etc.)
+     * @return FTXUI Color for the log level background, or default if no special background needed
+     */
+    ftxui::Color GetLogLevelBackgroundColor(const std::string& log_level) const;
+    
+    /**
+     * Check if a log level should be displayed with prominent styling.
+     * @param log_level The log level to check
+     * @return True if the log level should be prominently displayed
+     */
+    bool IsLogLevelProminent(const std::string& log_level) const;
+    
+    /**
+     * Check if a log level should be displayed with bold text.
+     * @param log_level The log level to check
+     * @return True if the log level should use bold text
+     */
+    bool ShouldLogLevelUseBold(const std::string& log_level) const;
+    
+    /**
      * Get the default background color.
      * @return FTXUI Color for background
      */

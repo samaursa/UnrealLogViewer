@@ -47,11 +47,11 @@ ftxui::Color VisualThemeManager::AssignLoggerColor(const std::string& logger_nam
 }
 
 ftxui::Color VisualThemeManager::GetLogLevelColor(const std::string& log_level) const {
-    // Handle Unreal Engine specific log levels
+    // Handle Unreal Engine specific log levels with enhanced colors for better visibility
     if (log_level == "Error") {
-        return ftxui::Color::RedLight;
+        return ftxui::Color::Red;  // Bright red for maximum visibility
     } else if (log_level == "Warning") {
-        return ftxui::Color::YellowLight;
+        return ftxui::Color::Yellow;  // Bright yellow for clear distinction
     } else if (log_level == "Display") {
         return ftxui::Color::White;
     } else if (log_level == "Verbose") {
@@ -70,6 +70,26 @@ ftxui::Color VisualThemeManager::GetLogLevelColor(const std::string& log_level) 
     }
     
     return ftxui::Color::White; // Default color for unknown levels
+}
+
+ftxui::Color VisualThemeManager::GetLogLevelBackgroundColor(const std::string& log_level) const {
+    // Only provide background colors for the most critical levels
+    if (log_level == "Error") {
+        return ftxui::Color::RedLight;  // Light red background for errors
+    }
+    
+    // No special background for other levels - return default background
+    return GetBackgroundColor();
+}
+
+bool VisualThemeManager::IsLogLevelProminent(const std::string& log_level) const {
+    // Error and Warning levels should be prominently displayed
+    return (log_level == "Error" || log_level == "Warning");
+}
+
+bool VisualThemeManager::ShouldLogLevelUseBold(const std::string& log_level) const {
+    // Errors should always be bold, warnings should be bold for prominence
+    return (log_level == "Error" || log_level == "Warning");
 }
 
 ftxui::Color VisualThemeManager::GetBackgroundColor() const {

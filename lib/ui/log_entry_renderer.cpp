@@ -57,7 +57,11 @@ Element LogEntryRenderer::RenderLogEntry(const LogEntry& entry, bool is_selected
     // Create the row with proper spacing
     Element row = hbox(row_elements);
     
-    // Apply selection highlighting
+    // Apply row-level visual hierarchy - always apply to maintain column alignment
+    std::string level = entry.Get_log_level().has_value() ? entry.Get_log_level().value() : "";
+    row = ApplyRowLevelHierarchy(row, level, is_selected);
+    
+    // Apply selection highlighting (after hierarchy styling to ensure it takes precedence)
     if (is_selected) {
         row = row | inverted;
     }
@@ -214,6 +218,20 @@ Element LogEntryRenderer::RenderMessage(const LogEntry& entry, bool is_selected)
         message_element = text(entry.Get_message());
     }
     
+    // Apply visual hierarchy to message content for prominent log levels
+    if (entry.Get_log_level().has_value()) {
+        const std::string& level = entry.Get_log_level().value();
+        if (theme_manager_->IsLogLevelProminent(level)) {
+            Color level_color = theme_manager_->GetLogLevelColor(level);
+            message_element = message_element | color(level_color);
+            
+            // Make error messages bold for better readability
+            if (level == "Error") {
+                message_element = message_element | bold;
+            }
+        }
+    }
+    
     return message_element;
 }
 
@@ -229,15 +247,28 @@ Element LogEntryRenderer::CreateBadgeElement(const std::string& text, Color colo
 
 Element LogEntryRenderer::ApplyLogLevelStyling(Element element, const std::string& level) const {
     Color level_color = theme_manager_->GetLogLevelColor(level);
+    Color bg_color = theme_manager_->GetLogLevelBackgroundColor(level);
     
-    // Apply color and make errors/warnings more prominent
-    if (level == "Error") {
-        return element | color(level_color) | bold;
-    } else if (level == "Warning") {
-        return element | color(level_color);
-    } else {
-        return element | color(level_color);
+    // Start with the base element and color
+    Element styled_element = element | color(level_color);
+    
+    // Apply bold styling for prominent levels
+    if (theme_manager_->ShouldLogLevelUseBold(level)) {
+        styled_element = styled_element | bold;
     }
+    
+    // Apply background color for critical levels (like errors)
+    if (bg_color != theme_manager_->GetBackgroundColor()) {
+        styled_element = styled_element | bgcolor(bg_color);
+    }
+    
+    // Add additional visual emphasis for errors
+    if (level == "Error") {
+        // Make errors even more prominent with inverted colors for maximum visibility
+        styled_element = styled_element | inverted;
+    }
+    
+    return styled_element;
 }
 
 std::string LogEntryRenderer::TruncateText(const std::string& text, int max_width) const {
@@ -267,6 +298,46 @@ std::string LogEntryRenderer::PadText(const std::string& text, int width) const 
     }
     
     return text + std::string(width - text.length(), ' ');
+}
+
+Element LogEntryRenderer::ApplyRowLevelHierarchy(Element element, const std::string& level, bool is_selected) const {
+    // Get the appropriate indicator color for this log level
+    Color indicator_color;
+    
+    if (level == "Error") {
+        indicator_color = Color::RedLight;
+        // Errors get a subtle red background tint for the entire row (unless selected)
+        if (!is_selected) {
+            element = element | bgcolor(Color::RGB(40, 20, 20)); // Dark red tint
+        }
+    } else if (level == "Warning") {
+        indicator_color = Color::YellowLight;
+        // Warnings get a subtle yellow background tint for the entire row (unless selected)
+        if (!is_selected) {
+            element = element | bgcolor(Color::RGB(40, 40, 20)); // Dark yellow tint
+        }
+    } else if (level.empty()) {
+        // For entries without log levels, use a very subtle gray indicator
+        indicator_color = Color::GrayDark;
+    } else {
+        // For normal entries, use a subtle indicator that matches the log level color
+        indicator_color = theme_manager_->GetLogLevelColor(level);
+        // Make the indicator more subtle for normal entries by using a darker version
+        if (indicator_color == Color::White) {
+            indicator_color = Color::GrayDark;
+        } else if (indicator_color == Color::GrayLight) {
+            indicator_color = Color::GrayDark;
+        }
+        // For other colors, use them as-is but they'll be more subtle than Error/Warning
+    }
+    
+    // Add the left border indicator for all entries to maintain column alignment
+    element = hbox({
+        text("▌") | color(indicator_color),
+        element
+    });
+    
+    return element;
 }
 
 } // namespace ue_log

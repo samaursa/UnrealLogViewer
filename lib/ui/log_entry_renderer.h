@@ -141,6 +141,15 @@ private:
     ftxui::Element ApplyLogLevelStyling(ftxui::Element element, const std::string& level) const;
     
     /**
+     * Apply row-level visual hierarchy styling based on log level.
+     * @param element The row element to style
+     * @param level The log level string
+     * @param is_selected Whether the row is currently selected
+     * @return Styled FTXUI Element with appropriate visual hierarchy
+     */
+    ftxui::Element ApplyRowLevelHierarchy(ftxui::Element element, const std::string& level, bool is_selected) const;
+    
+    /**
      * Truncate text to fit within a maximum width.
      * @param text The text to truncate
      * @param max_width Maximum width in characters
