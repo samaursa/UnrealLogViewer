@@ -119,6 +119,64 @@ public:
      */
     void SetVisualSeparatorsEnabled(bool enabled);
 
+    // Visual polish and consistency methods
+    
+    /**
+     * Get the focus indicator color for interactive elements.
+     * @return FTXUI Color for focus indicators
+     */
+    ftxui::Color GetFocusColor() const;
+    
+    /**
+     * Get the hover color for interactive elements.
+     * @return FTXUI Color for hover states
+     */
+    ftxui::Color GetHoverColor() const;
+    
+    /**
+     * Get the border color for UI elements.
+     * @return FTXUI Color for borders and separators
+     */
+    ftxui::Color GetBorderColor() const;
+    
+    /**
+     * Get the muted text color for less important information.
+     * @return FTXUI Color for muted text
+     */
+    ftxui::Color GetMutedTextColor() const;
+    
+    /**
+     * Get the accent color for important UI elements.
+     * @return FTXUI Color for accents
+     */
+    ftxui::Color GetAccentColor() const;
+    
+    /**
+     * Check if the current theme is optimized for reduced eye strain.
+     * @return True if using eye strain reduction colors
+     */
+    bool IsEyeStrainReductionEnabled() const;
+    
+    /**
+     * Enable or disable eye strain reduction color scheme.
+     * @param enabled True to enable eye strain reduction
+     */
+    void SetEyeStrainReductionEnabled(bool enabled);
+    
+    /**
+     * Get the appropriate font weight for a UI element type.
+     * @param element_type Type of UI element (header, body, emphasis, etc.)
+     * @return True if element should use bold font weight
+     */
+    bool GetFontWeight(const std::string& element_type) const;
+    
+    /**
+     * Get the appropriate font size indicator for a UI element type.
+     * @param element_type Type of UI element
+     * @return Font size indicator (0=normal, 1=large, -1=small)
+     */
+    int GetFontSize(const std::string& element_type) const;
+
     // Utility methods
     
     /**
@@ -146,12 +204,24 @@ private:
     // Column spacing configuration
     ColumnSpacing column_spacing_;
     
+    // Visual polish configuration
+    bool eye_strain_reduction_enabled_ = true;
+    
+    // Font configuration
+    std::unordered_map<std::string, bool> font_weights_;
+    std::unordered_map<std::string, int> font_sizes_;
+    
     // Helper methods
     
     /**
      * Initialize the color palette with default colors.
      */
     void InitializeColorPalette();
+    
+    /**
+     * Initialize font configuration with default settings.
+     */
+    void InitializeFontConfiguration();
     
     /**
      * Assign a new color to a logger from the cycling palette.

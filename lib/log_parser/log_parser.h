@@ -76,6 +76,7 @@ namespace ue_log {
         void ResetState();
         std::string GetLineFromOffset(size_t offset, size_t& next_offset);
         bool IsValidLogLine(const std::string& line);
+        bool HasTimestamp(const std::string& line);
     };
     
 } // namespace ue_log

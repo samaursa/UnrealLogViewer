@@ -445,20 +445,49 @@ namespace ue_log {
         size_t line_number = current_line_number;
         
         // Pre-allocate memory for entries to avoid reallocations
-        entries.reserve(lines.size());
+        entries.reserve(lines.size() / 2); // Estimate fewer entries due to grouping
         
-        for (const std::string& line : lines) {
-            if (IsValidLogLine(line)) {
-                LogEntry entry = ParseSingleEntry(line, line_number);
-                entries.push_back(entry);
+        for (size_t i = 0; i < lines.size(); i++) {
+            const std::string& line = lines[i];
+            
+            if (IsValidLogLine(line) && HasTimestamp(line)) {
+                // This is a new log entry with timestamp
+                LogEntry entry = ParseSingleEntry(line, line_number + i);
+                
+                // Look ahead for continuation lines (lines without timestamps)
+                std::string combined_message = entry.Get_message();
+                size_t j = i + 1;
+                
+                while (j < lines.size() && !lines[j].empty() && !HasTimestamp(lines[j])) {
+                    // This is a continuation line - append it to the message
+                    combined_message += "\n" + lines[j];
+                    j++;
+                }
+                
+                // Create a new entry with the combined message
+                LogEntry combined_entry(
+                    entry.Get_entry_type(),
+                    entry.Get_timestamp(),
+                    entry.Get_frame_number(),
+                    entry.Get_logger_name(),
+                    entry.Get_log_level(),
+                    combined_message,
+                    entry.Get_raw_line(), // Keep original raw line for the main entry
+                    entry.Get_line_number()
+                );
+                
+                entries.push_back(combined_entry);
+                
+                // Skip the continuation lines we just processed
+                i = j - 1; // -1 because the for loop will increment
             }
-            line_number++;
+            // Skip lines that don't have timestamps (they should be handled as continuations)
         }
         
         // Update parsed entries
         parsed_entries.reserve(parsed_entries.size() + entries.size());
         parsed_entries.insert(parsed_entries.end(), entries.begin(), entries.end());
-        current_line_number = line_number;
+        current_line_number = line_number + lines.size();
         
         return entries;
     }
@@ -590,6 +619,28 @@ namespace ue_log {
         return !line.empty() && 
                line.find(':') != std::string::npos &&
                line.length() > 3;  // Minimum reasonable log line length
+    }
+    
+    bool LogParser::HasTimestamp(const std::string& line) {
+        // Check if line starts with a timestamp pattern like [2024.09.30-14.56.10:293]
+        // This is a simple check - if it starts with '[' and contains a timestamp-like pattern
+        if (line.empty() || line[0] != '[') {
+            return false;
+        }
+        
+        // Look for the closing bracket of the timestamp
+        size_t close_bracket = line.find(']');
+        if (close_bracket == std::string::npos || close_bracket < 10) {
+            return false;
+        }
+        
+        // Extract the potential timestamp part
+        std::string timestamp_part = line.substr(1, close_bracket - 1);
+        
+        // Check if it contains timestamp-like patterns (digits, dots, colons, dashes)
+        // A valid timestamp should have at least: YYYY.MM.DD-HH.MM.SS:mmm format
+        std::regex timestamp_pattern(R"(\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2}:\d{3})");
+        return std::regex_search(timestamp_part, timestamp_pattern);
     }
     
 } // namespace ue_log

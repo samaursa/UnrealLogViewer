@@ -113,6 +113,25 @@ public:
      * @return True if line numbers are shown
      */
     bool IsShowLineNumbers() const { return show_line_numbers_; }
+    
+    /**
+     * Apply consistent visual polish to UI elements.
+     * @param element The element to polish
+     * @param element_type Type of element (header, body, emphasis, etc.)
+     * @param is_interactive Whether the element is interactive
+     * @param is_focused Whether the element has focus
+     * @param is_hovered Whether the element is being hovered
+     * @return Polished FTXUI Element
+     */
+    ftxui::Element ApplyVisualPolish(ftxui::Element element, const std::string& element_type, 
+                                    bool is_interactive = false, bool is_focused = false, 
+                                    bool is_hovered = false) const;
+    
+    /**
+     * Create a consistent separator element.
+     * @return FTXUI Element for column separation
+     */
+    ftxui::Element CreateSeparator() const;
 
 private:
     // Dependencies

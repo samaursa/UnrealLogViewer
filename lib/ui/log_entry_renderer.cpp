@@ -25,31 +25,24 @@ Element LogEntryRenderer::RenderLogEntry(const LogEntry& entry, bool is_selected
     // Line number column (if enabled)
     if (show_line_numbers_) {
         row_elements.push_back(RenderLineNumber(relative_line_number, is_selected));
-        // Add visual separator after line number
-        std::string separator = theme_manager_->GetColumnSeparator();
-        row_elements.push_back(text(separator) | color(Color::GrayDark));
+        row_elements.push_back(CreateSeparator());
     }
     
     // Timestamp column
     row_elements.push_back(RenderTimestamp(entry));
-    // Add visual separator after timestamp
-    std::string separator = theme_manager_->GetColumnSeparator();
-    row_elements.push_back(text(separator) | color(Color::GrayDark));
+    row_elements.push_back(CreateSeparator());
     
     // Frame number column
     row_elements.push_back(RenderFrameNumber(entry));
-    // Add visual separator after frame
-    row_elements.push_back(text(separator) | color(Color::GrayDark));
+    row_elements.push_back(CreateSeparator());
     
     // Logger badge column
     row_elements.push_back(RenderLoggerBadge(entry));
-    // Add visual separator after logger
-    row_elements.push_back(text(separator) | color(Color::GrayDark));
+    row_elements.push_back(CreateSeparator());
     
     // Log level column
     row_elements.push_back(RenderLogLevel(entry));
-    // Add visual separator after log level
-    row_elements.push_back(text(separator) | color(Color::GrayDark));
+    row_elements.push_back(CreateSeparator());
     
     // Message column (flexible width)
     row_elements.push_back(RenderMessage(entry, is_selected) | flex);
@@ -73,42 +66,41 @@ Element LogEntryRenderer::RenderTableHeader() const {
     std::vector<Element> header_elements;
     auto spacing = theme_manager_->GetColumnSpacing();
     
+    // Add visual hierarchy indicator space to match log entries
+    header_elements.push_back(text(" "));
+    
     // Line number header (if enabled)
     if (show_line_numbers_) {
-        header_elements.push_back(
-            text(PadText("Line", spacing.line_number_width)) | bold
-        );
-        // Add visual separator after line number header
-        std::string separator = theme_manager_->GetColumnSeparator();
-        header_elements.push_back(text(separator) | color(Color::GrayDark));
+        Element line_header = text(PadText("Line", spacing.line_number_width));
+        line_header = ApplyVisualPolish(line_header, "header");
+        header_elements.push_back(line_header);
+        header_elements.push_back(CreateSeparator());
     }
     
-    // Column headers with separators
-    std::string separator = theme_manager_->GetColumnSeparator();
+    // Column headers with quick filter numbers and consistent visual polish
+    Element timestamp_header = text(PadText("1:Timestamp", spacing.timestamp_width));
+    timestamp_header = ApplyVisualPolish(timestamp_header, "header");
+    header_elements.push_back(timestamp_header);
+    header_elements.push_back(CreateSeparator());
     
-    header_elements.push_back(
-        text(PadText("Timestamp", spacing.timestamp_width)) | bold
-    );
-    header_elements.push_back(text(separator) | color(Color::GrayDark));
+    Element frame_header = text(PadText("2:Frame", spacing.frame_width));
+    frame_header = ApplyVisualPolish(frame_header, "header");
+    header_elements.push_back(frame_header);
+    header_elements.push_back(CreateSeparator());
     
-    header_elements.push_back(
-        text(PadText("Frame", spacing.frame_width)) | bold
-    );
-    header_elements.push_back(text(separator) | color(Color::GrayDark));
+    Element logger_header = text(PadText("3:Logger", spacing.logger_badge_width));
+    logger_header = ApplyVisualPolish(logger_header, "header");
+    header_elements.push_back(logger_header);
+    header_elements.push_back(CreateSeparator());
     
-    header_elements.push_back(
-        text(PadText("Logger", spacing.logger_badge_width)) | bold
-    );
-    header_elements.push_back(text(separator) | color(Color::GrayDark));
+    Element level_header = text(PadText("4:Level", spacing.level_width));
+    level_header = ApplyVisualPolish(level_header, "header");
+    header_elements.push_back(level_header);
+    header_elements.push_back(CreateSeparator());
     
-    header_elements.push_back(
-        text(PadText("Level", spacing.level_width)) | bold
-    );
-    header_elements.push_back(text(separator) | color(Color::GrayDark));
-    
-    header_elements.push_back(
-        text("Message") | bold | flex
-    );
+    Element message_header = text("5:Message") | flex;
+    message_header = ApplyVisualPolish(message_header, "header");
+    header_elements.push_back(message_header);
     
     return hbox(header_elements) | color(theme_manager_->GetHighlightColor());
 }
@@ -140,8 +132,14 @@ Element LogEntryRenderer::RenderLineNumber(int relative_number, bool is_current)
         element = text(PadText(line_text, spacing.line_number_width));
     }
     
+    // Apply visual polish
+    std::string element_type = is_current ? "emphasis" : "muted";
+    element = ApplyVisualPolish(element, element_type);
+    
     if (is_current) {
-        element = element | bold | color(theme_manager_->GetHighlightColor());
+        element = element | color(theme_manager_->GetHighlightColor());
+    } else {
+        element = element | color(theme_manager_->GetMutedTextColor());
     }
     
     return element;
@@ -158,7 +156,11 @@ Element LogEntryRenderer::RenderTimestamp(const LogEntry& entry) const {
         timestamp_str = TruncateText(timestamp_str, spacing.timestamp_width);
     }
     
-    return text(PadText(timestamp_str, spacing.timestamp_width));
+    Element element = text(PadText(timestamp_str, spacing.timestamp_width));
+    element = ApplyVisualPolish(element, "body");
+    
+    // Use muted color for timestamps to reduce visual noise
+    return element | color(theme_manager_->GetMutedTextColor());
 }
 
 Element LogEntryRenderer::RenderFrameNumber(const LogEntry& entry) const {
@@ -167,6 +169,7 @@ Element LogEntryRenderer::RenderFrameNumber(const LogEntry& entry) const {
     std::string frame_str = entry.Get_frame_number().has_value() ? 
                            std::to_string(entry.Get_frame_number().value()) : "N/A";
     
+    Element element;
     // Apply right alignment for numbers if configured
     if (spacing.align_numbers_right && entry.Get_frame_number().has_value()) {
         // Right-align the number within the column width
@@ -174,10 +177,15 @@ Element LogEntryRenderer::RenderFrameNumber(const LogEntry& entry) const {
         if (padding_needed > 0) {
             frame_str = std::string(padding_needed, ' ') + frame_str;
         }
-        return text(frame_str.substr(0, spacing.frame_width));
+        element = text(frame_str.substr(0, spacing.frame_width));
     } else {
-        return text(PadText(frame_str, spacing.frame_width));
+        element = text(PadText(frame_str, spacing.frame_width));
     }
+    
+    element = ApplyVisualPolish(element, "body");
+    
+    // Use muted color for frame numbers to reduce visual noise
+    return element | color(theme_manager_->GetMutedTextColor());
 }
 
 Element LogEntryRenderer::RenderLoggerBadge(const LogEntry& entry) const {
@@ -305,39 +313,85 @@ Element LogEntryRenderer::ApplyRowLevelHierarchy(Element element, const std::str
     Color indicator_color;
     
     if (level == "Error") {
-        indicator_color = Color::RedLight;
+        indicator_color = theme_manager_->GetLogLevelColor("Error");
         // Errors get a subtle red background tint for the entire row (unless selected)
-        if (!is_selected) {
+        if (!is_selected && theme_manager_->IsEyeStrainReductionEnabled()) {
+            element = element | bgcolor(Color::RGB(30, 15, 15)); // Very subtle dark red tint
+        } else if (!is_selected) {
             element = element | bgcolor(Color::RGB(40, 20, 20)); // Dark red tint
         }
     } else if (level == "Warning") {
-        indicator_color = Color::YellowLight;
+        indicator_color = theme_manager_->GetLogLevelColor("Warning");
         // Warnings get a subtle yellow background tint for the entire row (unless selected)
-        if (!is_selected) {
+        if (!is_selected && theme_manager_->IsEyeStrainReductionEnabled()) {
+            element = element | bgcolor(Color::RGB(30, 30, 15)); // Very subtle dark yellow tint
+        } else if (!is_selected) {
             element = element | bgcolor(Color::RGB(40, 40, 20)); // Dark yellow tint
         }
     } else if (level.empty()) {
-        // For entries without log levels, use a very subtle gray indicator
-        indicator_color = Color::GrayDark;
+        // For entries without log levels, use a very subtle border indicator
+        indicator_color = theme_manager_->GetBorderColor();
     } else {
         // For normal entries, use a subtle indicator that matches the log level color
         indicator_color = theme_manager_->GetLogLevelColor(level);
-        // Make the indicator more subtle for normal entries by using a darker version
-        if (indicator_color == Color::White) {
-            indicator_color = Color::GrayDark;
-        } else if (indicator_color == Color::GrayLight) {
-            indicator_color = Color::GrayDark;
+        // Make the indicator more subtle for normal entries by using border color
+        if (indicator_color == Color::White || indicator_color == theme_manager_->GetTextColor()) {
+            indicator_color = theme_manager_->GetBorderColor();
         }
-        // For other colors, use them as-is but they'll be more subtle than Error/Warning
     }
     
     // Add the left border indicator for all entries to maintain column alignment
+    // Use a more subtle indicator character for better visual balance
     element = hbox({
         text("▌") | color(indicator_color),
         element
     });
     
     return element;
+}
+
+Element LogEntryRenderer::ApplyVisualPolish(Element element, const std::string& element_type, 
+                                           bool is_interactive, bool is_focused, 
+                                           bool is_hovered) const {
+    // Apply font weight based on element type
+    if (theme_manager_->GetFontWeight(element_type)) {
+        element = element | bold;
+    }
+    
+    // Apply interactive states
+    if (is_interactive) {
+        if (is_focused) {
+            element = element | color(theme_manager_->GetFocusColor());
+        } else if (is_hovered) {
+            element = element | color(theme_manager_->GetHoverColor());
+        }
+    }
+    
+    // Apply element-specific styling
+    if (element_type == "header") {
+        element = element | color(theme_manager_->GetHighlightColor());
+    } else if (element_type == "muted") {
+        element = element | color(theme_manager_->GetMutedTextColor());
+    } else if (element_type == "emphasis") {
+        element = element | color(theme_manager_->GetAccentColor());
+    } else if (element_type == "error") {
+        element = element | color(theme_manager_->GetLogLevelColor("Error"));
+        if (theme_manager_->GetFontWeight("error")) {
+            element = element | bold;
+        }
+    } else if (element_type == "warning") {
+        element = element | color(theme_manager_->GetLogLevelColor("Warning"));
+        if (theme_manager_->GetFontWeight("warning")) {
+            element = element | bold;
+        }
+    }
+    
+    return element;
+}
+
+Element LogEntryRenderer::CreateSeparator() const {
+    std::string separator = theme_manager_->GetColumnSeparator();
+    return text(separator) | color(theme_manager_->GetBorderColor());
 }
 
 } // namespace ue_log

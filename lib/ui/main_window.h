@@ -305,6 +305,19 @@ public:
     bool IsWordWrapEnabled() const { return word_wrap_enabled_; }
     bool IsDetailViewVisible() const { return show_detail_view_; }
     
+    // Detail view focus and navigation
+    void FocusDetailView();
+    void UnfocusDetailView();
+    bool IsDetailViewFocused() const { return detail_view_focused_; }
+    void DetailViewScrollUp(int count = 1);
+    void DetailViewScrollDown(int count = 1);
+    void DetailViewPageUp();
+    void DetailViewPageDown();
+    void DetailViewHalfPageUp();
+    void DetailViewHalfPageDown();
+    void DetailViewScrollToTop();
+    void DetailViewScrollToBottom();
+    
     // Vim-style navigation functionality
     bool HandleVimStyleNavigation(const std::string& input);
     void ExecuteVimNavigation(int count, char direction);
@@ -347,6 +360,8 @@ private:
     bool show_jump_dialog_ = false;
     bool word_wrap_enabled_ = false; // Word wrap toggle
     bool show_detail_view_ = true; // Detail view window toggle
+    bool detail_view_focused_ = false; // Whether detail view has focus
+    int detail_view_scroll_offset_ = 0; // Scroll position within detail view
     int window_width_ = 0;
     int window_height_ = 0;
     

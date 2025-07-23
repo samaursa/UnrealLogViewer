@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <algorithm>
 #include <chrono>
+#include <sstream>
 #include <fstream>
 
 namespace ue_log {
@@ -49,6 +50,12 @@ public:
             }
             if (parent_->IsSearchActive()) {
                 parent_->HideSearch();
+                return true;
+            }
+            // 4. Check if detail view is focused
+            if (parent_->IsDetailViewFocused()) {
+                parent_->UnfocusDetailView();
+                parent_->SetLastError("Detail view unfocused - TAB to focus again");
                 return true;
             }
             // ESC with no active context menus does nothing
@@ -432,12 +439,21 @@ public:
             }
         }
         
-        // Focus filter panel or return focus to main window
+        // Focus cycling: Main Window -> Filter Panel (if visible) -> Detail View -> Main Window
         if (event == Event::Tab) {
             if (parent_->GetFilterPanel() && parent_->IsFilterPanelVisible()) {
                 if (parent_->GetFilterPanel()->IsFocused()) {
-                    // Filter panel is focused, return focus to main window
+                    // Filter panel is focused, focus detail view if visible
                     parent_->GetFilterPanel()->SetFocus(false);
+                    if (parent_->IsDetailViewVisible()) {
+                        parent_->FocusDetailView();
+                        parent_->SetLastError("Detail view focused - j/k to scroll, ESC to unfocus");
+                    } else {
+                        parent_->SetLastError("Main window focused - use arrow keys to navigate logs");
+                    }
+                } else if (parent_->IsDetailViewFocused()) {
+                    // Detail view is focused, return to main window
+                    parent_->UnfocusDetailView();
                     parent_->SetLastError("Main window focused - use arrow keys to navigate logs");
                 } else {
                     // Main window is focused, focus filter panel
@@ -448,8 +464,17 @@ public:
                     }
                     parent_->SetLastError("Filter panel focused - use arrow keys to navigate filters, Space to toggle");
                 }
-                return true;
+            } else {
+                // No filter panel, cycle between main window and detail view
+                if (parent_->IsDetailViewFocused()) {
+                    parent_->UnfocusDetailView();
+                    parent_->SetLastError("Main window focused - use arrow keys to navigate logs");
+                } else if (parent_->IsDetailViewVisible()) {
+                    parent_->FocusDetailView();
+                    parent_->SetLastError("Detail view focused - j/k to scroll, ESC to unfocus");
+                }
             }
+            return true;
         }
         
         // Reload file
@@ -488,6 +513,11 @@ public:
         
         // Navigation keys - check if filter panel has focus first
         if (event == Event::ArrowUp || event == Event::Character('k')) {
+            // Check focus priority: Detail View -> Filter Panel -> Main Window
+            if (parent_->IsDetailViewFocused()) {
+                parent_->DetailViewScrollUp();
+                return true;
+            }
             // If filter panel has focus, let it handle the event
             if (parent_->GetFilterPanel() && parent_->GetFilterPanel()->IsFocused()) {
                 parent_->GetFilterPanel()->NavigateUp();
@@ -497,6 +527,11 @@ public:
             return true;
         }
         if (event == Event::ArrowDown || event == Event::Character('j')) {
+            // Check focus priority: Detail View -> Filter Panel -> Main Window
+            if (parent_->IsDetailViewFocused()) {
+                parent_->DetailViewScrollDown();
+                return true;
+            }
             // If filter panel has focus, let it handle the event
             if (parent_->GetFilterPanel() && parent_->GetFilterPanel()->IsFocused()) {
                 parent_->GetFilterPanel()->NavigateDown();
@@ -506,28 +541,52 @@ public:
             return true;
         }
         if (event == Event::PageUp) {
+            if (parent_->IsDetailViewFocused()) {
+                parent_->DetailViewPageUp();
+                return true;
+            }
             parent_->PageUp();
             return true;
         }
         if (event == Event::PageDown) {
+            if (parent_->IsDetailViewFocused()) {
+                parent_->DetailViewPageDown();
+                return true;
+            }
             parent_->PageDown();
             return true;
         }
         
         // Vim-style half-page navigation
         if (event == Event::Character(static_cast<char>(4))) { // Ctrl+D (ASCII 4)
+            if (parent_->IsDetailViewFocused()) {
+                parent_->DetailViewHalfPageDown();
+                return true;
+            }
             parent_->HalfPageDown();
             return true;
         }
         if (event == Event::Character(static_cast<char>(21))) { // Ctrl+U (ASCII 21)
+            if (parent_->IsDetailViewFocused()) {
+                parent_->DetailViewHalfPageUp();
+                return true;
+            }
             parent_->HalfPageUp();
             return true;
         }
         if (event == Event::Home) {
+            if (parent_->IsDetailViewFocused()) {
+                parent_->DetailViewScrollToTop();
+                return true;
+            }
             parent_->ScrollToTop();
             return true;
         }
         if (event == Event::End) {
+            if (parent_->IsDetailViewFocused()) {
+                parent_->DetailViewScrollToBottom();
+                return true;
+            }
             parent_->ScrollToBottom();
             return true;
         }
@@ -574,6 +633,10 @@ void MainWindow::Initialize() {
     // Initialize filter expression
     current_filter_expression_ = std::make_unique<FilterExpression>(FilterOperator::And);
     
+    // Initialize default window size if not set
+    if (window_width_ <= 0) window_width_ = 120;
+    if (window_height_ <= 0) window_height_ = 30;
+    
     // Initialize UI components
     if (filter_panel_) {
         filter_panel_->Initialize();
@@ -605,7 +668,13 @@ ftxui::Element MainWindow::Render() const {
     // Add detail view if enabled (shows full raw log entry)
     if (show_detail_view_) {
         main_elements.push_back(separator());
-        main_elements.push_back(RenderDetailView() | size(HEIGHT, EQUAL, 5));
+        // Dynamic sizing: small when not focused, larger when focused
+        // Use a reasonable fallback if window_height_ is not set
+        int available_height = (window_height_ > 0) ? window_height_ : 30; // Fallback to 30 lines
+        int detail_height = detail_view_focused_ ? 
+                           std::max(15, available_height * 2 / 3) :  // 2/3 of screen when focused
+                           5;                                        // 5 lines when not focused
+        main_elements.push_back(RenderDetailView() | size(HEIGHT, EQUAL, detail_height));
     }
     
     // Add search status bar if active (appears above main status bar)
@@ -944,12 +1013,19 @@ void MainWindow::SaveConfiguration() {
 }
 
 int MainWindow::GetVisibleHeight() const {
-    // Calculate dynamic height based on available terminal space
-    int visible_height = std::max(10, window_height_ - 5); // Reserve space for header, status bar, etc.
-    if (visible_height <= 0 || window_height_ <= 0) {
-        visible_height = 25; // Fallback to reasonable default
+    // Calculate the visible height (available space for log entries)
+    // Use a reasonable default if window_height_ is not set
+    int available_height = (window_height_ > 0) ? window_height_ : 30;
+    
+    // Reserve space for header, status bar, and detail view if visible
+    int reserved_space = 3; // 1 for header, 1 for status bar, 1 for border
+    if (show_detail_view_) {
+        reserved_space += detail_view_focused_ ? 
+            std::max(15, available_height * 2 / 3) : 5;
     }
-    return visible_height;
+    
+    // Calculate visible height for log entries
+    return std::max(5, available_height - reserved_space);
 }
 
 ftxui::Element MainWindow::RenderLogTable() const {
@@ -966,29 +1042,29 @@ ftxui::Element MainWindow::RenderLogTable() const {
             rows.push_back(text("No entries match the current filters.") | center);
         }
     } else {
-        // Calculate viewport size based on available space
-        // Account for detail view if it's open
-        int available_height = window_height_ > 0 ? window_height_ - 3 : 100; // Reserve space for header, status bar
-        if (show_detail_view_) {
-            available_height -= 7; // Reserve space for detail view (5 lines + separator + title)
-        }
-        int viewport_size = std::max(10, available_height);
+        // Performance optimization: Only render entries that are likely to be visible
+        // Calculate a reasonable window size with buffer for scrolling
+        int visible_height = GetVisibleHeight();
+        int buffer = visible_height * 2; // Add buffer for smooth scrolling
         
-        // Allow scrolling past the end so last entries can be seen mid-screen
-        int half_viewport = viewport_size / 2;
-        int max_start_index = static_cast<int>(filtered_entries_.size()) - half_viewport;
+        // Calculate start and end indices with buffer
+        int total_entries = static_cast<int>(filtered_entries_.size());
+        int start_idx = std::max(0, std::min(selected_entry_index_ - buffer, total_entries - visible_height - buffer));
+        int end_idx = std::min(total_entries, start_idx + visible_height + buffer * 2);
         
-        // Calculate start index - allow going past the end for better visibility of last entries
-        int start_index = std::max(0, std::min(selected_entry_index_ - half_viewport, max_start_index));
-        int end_index = std::min(start_index + viewport_size, static_cast<int>(filtered_entries_.size()));
-        
-        // Render the viewport entries
-        for (int i = start_index; i < end_index; ++i) {
+        // Render entries in the window
+        for (int i = start_idx; i < end_idx; ++i) {
             bool is_selected = (i == selected_entry_index_);
             rows.push_back(RenderLogEntry(filtered_entries_[i], is_selected));
         }
         
-        // Note: scroll_offset_ will be updated by navigation methods, not here in const render method
+        // Add indicators if we're not showing all entries
+        if (start_idx > 0) {
+            rows.insert(rows.begin() + 1, text("↑ More entries above ↑") | center | dim);
+        }
+        if (end_idx < total_entries) {
+            rows.push_back(text("↓ More entries below ↓") | center | dim);
+        }
     }
     
     // Add visual focus indicator - main window has focus when filter panel doesn't
@@ -996,6 +1072,9 @@ ftxui::Element MainWindow::RenderLogTable() const {
     
     // Create scrollable content that fills available space
     Element scrollable_content = vbox(rows) | vscroll_indicator | yframe | yflex;
+    
+    // We'll rely on EnsureSelectionVisible to handle scrolling to the selected entry
+    
     Element window_element = window(text(GetTitle()), scrollable_content);
     
     if (main_has_focus) {
@@ -1012,21 +1091,49 @@ ftxui::Element MainWindow::RenderLogTable() const {
 ftxui::Element MainWindow::RenderStatusBar() const {
     std::vector<Element> status_elements;
     
-    // File info
+    // File info with visual polish
     std::string file_info = current_file_path_.empty() ? "No file" : 
                            std::filesystem::path(current_file_path_).filename().string();
-    status_elements.push_back(text(file_info) | size(WIDTH, EQUAL, 25));
+    Element file_element = text(file_info) | size(WIDTH, EQUAL, 25);
+    if (visual_theme_manager_->GetFontWeight("status")) {
+        file_element = file_element | bold;
+    }
+    status_elements.push_back(file_element);
     
-    // Monitoring status
+    // Add separator with consistent styling
+    status_elements.push_back(text(" │ ") | color(visual_theme_manager_->GetBorderColor()));
+    
+    // Monitoring status with appropriate colors
     std::string monitor_info = IsRealTimeMonitoringActive() ? "LIVE" : "STATIC";
-    status_elements.push_back(text(monitor_info) | size(WIDTH, EQUAL, 8));
+    Element monitor_element = text(monitor_info) | size(WIDTH, EQUAL, 8);
+    if (IsRealTimeMonitoringActive()) {
+        monitor_element = monitor_element | color(visual_theme_manager_->GetAccentColor()) | bold;
+    } else {
+        monitor_element = monitor_element | color(visual_theme_manager_->GetMutedTextColor());
+    }
+    status_elements.push_back(monitor_element);
     
-    // Error message or help (takes up middle space)
+    // Add separator
+    status_elements.push_back(text(" │ ") | color(visual_theme_manager_->GetBorderColor()));
+    
+    // Error message or help (takes up middle space) with appropriate styling
     std::string message = last_error_.empty() ? "Press ':' for goto, 'g' for top, 'f' for filters, 'q' to quit" : last_error_;
-    status_elements.push_back(text(message) | flex);
+    Element message_element = text(message) | flex;
+    if (!last_error_.empty()) {
+        // Error messages should be more prominent
+        message_element = message_element | color(visual_theme_manager_->GetLogLevelColor("Warning"));
+    } else {
+        // Help text should be muted
+        message_element = message_element | color(visual_theme_manager_->GetMutedTextColor());
+    }
+    status_elements.push_back(message_element);
     
-    // Entry count and scroll info on the right
+    // Add separator
+    status_elements.push_back(text(" │ ") | color(visual_theme_manager_->GetBorderColor()));
+    
+    // Entry count and scroll info on the right with enhanced formatting
     std::string count_info;
+    Element count_element;
     if (!filtered_entries_.empty() && selected_entry_index_ >= 0 && selected_entry_index_ < static_cast<int>(filtered_entries_.size())) {
         const auto& selected_entry = filtered_entries_[selected_entry_index_];
         
@@ -1038,12 +1145,29 @@ ftxui::Element MainWindow::RenderStatusBar() const {
         if (filtered_entries_.size() != log_entries_.size()) {
             count_info += " (filtered from " + std::to_string(log_entries_.size()) + ")";
         }
+        
+        count_element = text(count_info);
+        if (visual_theme_manager_->GetFontWeight("status")) {
+            count_element = count_element | bold;
+        }
     } else {
         count_info = "No entries";
+        count_element = text(count_info) | color(visual_theme_manager_->GetMutedTextColor());
     }
-    status_elements.push_back(text(count_info));
+    status_elements.push_back(count_element);
     
-    return hbox(status_elements) | inverted;
+    // Apply consistent background and ensure good contrast
+    Element status_bar = hbox(status_elements);
+    
+    // Use inverted colors for status bar with eye strain considerations
+    if (visual_theme_manager_->IsEyeStrainReductionEnabled()) {
+        status_bar = status_bar | bgcolor(visual_theme_manager_->GetBorderColor()) | 
+                     color(visual_theme_manager_->GetBackgroundColor());
+    } else {
+        status_bar = status_bar | inverted;
+    }
+    
+    return status_bar;
 }
 
 ftxui::Element MainWindow::RenderFilterPanel() const {
@@ -1061,21 +1185,108 @@ ftxui::Element MainWindow::RenderFilterPanel() const {
 
 ftxui::Element MainWindow::RenderDetailView() const {
     if (selected_entry_index_ < 0 || selected_entry_index_ >= static_cast<int>(filtered_entries_.size())) {
-        return window(text("Detail View"), text("No entry selected") | center);
+        Element no_selection = text("No entry selected") | center;
+        no_selection = no_selection | color(visual_theme_manager_->GetMutedTextColor());
+        
+        std::string title_text = detail_view_focused_ ? "Detail View (Focused - ESC to unfocus)" : "Detail View (TAB to focus)";
+        Element title = text(title_text);
+        if (visual_theme_manager_->GetFontWeight("header")) {
+            title = title | bold;
+        }
+        title = title | color(detail_view_focused_ ? 
+                             visual_theme_manager_->GetFocusColor() : 
+                             visual_theme_manager_->GetHighlightColor());
+        
+        return window(title, no_selection);
     }
     
     const auto& selected_entry = filtered_entries_[selected_entry_index_];
     
-    // Create title with line number and type information
+    // Create title with focus indicator and navigation info
     std::string entry_type = selected_entry.IsStructured() ? "Structured" : 
                             selected_entry.IsSemiStructured() ? "Semi-Structured" : "Unstructured";
-    std::string title = "Detail View - Line " + std::to_string(selected_entry.Get_line_number()) + " (" + entry_type + ")";
+    std::string title_text = "Detail View - Line " + std::to_string(selected_entry.Get_line_number()) + " (" + entry_type + ")";
     
-    // Always use word wrapping in detail view for better readability
-    std::string raw_line = selected_entry.Get_raw_line();
-    Element content = paragraph(raw_line);
+    if (detail_view_focused_) {
+        title_text += " [FOCUSED - j/k to scroll, ESC to unfocus]";
+    } else {
+        title_text += " [TAB to focus]";
+    }
     
-    return window(text(title), content);
+    Element title = text(title_text);
+    if (visual_theme_manager_->GetFontWeight("header")) {
+        title = title | bold;
+    }
+    title = title | color(detail_view_focused_ ? 
+                         visual_theme_manager_->GetFocusColor() : 
+                         visual_theme_manager_->GetHighlightColor());
+    
+    // Use the full message (which now includes multi-line content) instead of raw_line
+    std::string full_message = selected_entry.Get_message();
+    
+    // Split message into lines for individual line navigation
+    std::vector<std::string> message_lines;
+    std::stringstream ss(full_message);
+    std::string line;
+    while (std::getline(ss, line)) {
+        message_lines.push_back(line);
+    }
+    
+    // If no lines (empty message), add a placeholder
+    if (message_lines.empty()) {
+        message_lines.push_back("(empty message)");
+    }
+    
+    // Calculate visible lines based on focus state and scroll offset
+    // Use a reasonable fallback if window_height_ is not set
+    int available_height = (window_height_ > 0) ? window_height_ : 30; // Fallback to 30 lines
+    int content_height = available_height - 2; // Exclude status bars
+    int visible_height = detail_view_focused_ ? 
+                        std::max(10, (content_height * 2) / 3 - 4) :  // 2/3 of screen when focused, -4 for window borders
+                        3;                                            // 3 lines when not focused
+    int start_line = detail_view_scroll_offset_;
+    int end_line = std::min(start_line + visible_height, static_cast<int>(message_lines.size()));
+    
+    // Create content elements for visible lines
+    std::vector<Element> content_elements;
+    for (int i = start_line; i < end_line; i++) {
+        Element line_element = text(message_lines[i]);
+        
+        // Apply log level styling to all lines
+        if (selected_entry.Get_log_level().has_value()) {
+            const std::string& level = selected_entry.Get_log_level().value();
+            if (visual_theme_manager_->IsLogLevelProminent(level)) {
+                line_element = line_element | color(visual_theme_manager_->GetLogLevelColor(level));
+                if (visual_theme_manager_->ShouldLogLevelUseBold(level)) {
+                    line_element = line_element | bold;
+                }
+            }
+        }
+        
+        content_elements.push_back(line_element);
+    }
+    
+    // Add scroll indicators if there are more lines
+    if (start_line > 0) {
+        content_elements.insert(content_elements.begin(), 
+                               text("... (" + std::to_string(start_line) + " lines above)") | 
+                               color(visual_theme_manager_->GetMutedTextColor()));
+    }
+    if (end_line < static_cast<int>(message_lines.size())) {
+        content_elements.push_back(
+            text("... (" + std::to_string(message_lines.size() - end_line) + " lines below)") | 
+            color(visual_theme_manager_->GetMutedTextColor()));
+    }
+    
+    Element content = vbox(content_elements);
+    
+    // Add border styling with focus indication
+    Element window_content = window(title, content);
+    if (detail_view_focused_) {
+        window_content = window_content | border | color(visual_theme_manager_->GetFocusColor());
+    }
+    
+    return window_content;
 }
 
 ftxui::Element MainWindow::RenderHelpDialog() const {
@@ -1304,17 +1515,21 @@ void MainWindow::EnsureSelectionVisible() {
         return;
     }
     
-    // Use a fixed visible height that matches our rendering
-    int visible_height = 15; // Same as in RenderLogTable
+    // Get the visible height using the consistent method
+    int visible_height = GetVisibleHeight();
     
-    // Only scroll if selection is outside visible area
-    // If selection is above visible area, scroll up to show it
+    // Update scroll_offset_ to ensure the selected entry is visible
+    // with some context around it
+    
+    // If selection is above visible area, scroll up to show it with some context
     if (selected_entry_index_ < scroll_offset_) {
-        scroll_offset_ = selected_entry_index_;
+        // Position the selected entry 1/4 of the way down from the top
+        scroll_offset_ = std::max(0, selected_entry_index_ - (visible_height / 4));
     }
-    // If selection is below visible area, scroll down to show it
+    // If selection is below visible area, scroll down to show it with some context
     else if (selected_entry_index_ >= scroll_offset_ + visible_height) {
-        scroll_offset_ = selected_entry_index_ - visible_height + 1;
+        // Position the selected entry 3/4 of the way down from the top
+        scroll_offset_ = selected_entry_index_ - (visible_height * 3 / 4);
     }
     
     // Ensure we don't scroll past the beginning or end
@@ -1821,6 +2036,14 @@ bool MainWindow::HandleVimStyleNavigation(const std::string& input) {
     
     // Handle j/k commands
     if (ch == 'j' || ch == 'k') {
+        // If detail view is focused, let it handle navigation instead of vim navigation
+        if (detail_view_focused_) {
+            // Don't handle vim navigation when detail view is focused
+            // Let the regular navigation handler take care of it
+            ClearVimCommandBuffer();
+            return false;
+        }
+        
         std::string full_command = vim_command_buffer_ + ch;
         
         int jump_distance;
@@ -2895,6 +3118,109 @@ void MainWindow::CreateFilterFromSearchAndColumn(FilterConditionType type, const
     OnFiltersChanged();
     
     last_error_ = "Filter created: " + type_description + " \"" + search_term + "\"";
+}
+
+// Detail view focus and navigation methods
+void MainWindow::FocusDetailView() {
+    detail_view_focused_ = true;
+    detail_view_scroll_offset_ = 0; // Reset scroll when focusing
+}
+
+void MainWindow::UnfocusDetailView() {
+    detail_view_focused_ = false;
+    detail_view_scroll_offset_ = 0; // Reset scroll when unfocusing
+}
+
+void MainWindow::DetailViewScrollUp(int count) {
+    if (!detail_view_focused_) return;
+    
+    detail_view_scroll_offset_ = std::max(0, detail_view_scroll_offset_ - count);
+}
+
+void MainWindow::DetailViewScrollDown(int count) {
+    if (!detail_view_focused_) return;
+    
+    // Get the current entry to calculate max scroll
+    if (selected_entry_index_ >= 0 && selected_entry_index_ < static_cast<int>(filtered_entries_.size())) {
+        const auto& selected_entry = filtered_entries_[selected_entry_index_];
+        std::string full_message = selected_entry.Get_message();
+        
+        // Count lines in the message
+        int line_count = 1;
+        for (char c : full_message) {
+            if (c == '\n') line_count++;
+        }
+        
+        int available_height = (window_height_ > 0) ? window_height_ : 30; // Fallback to 30 lines
+        int content_height = available_height - 2; // Exclude status bars
+        int visible_height = std::max(10, (content_height * 2) / 3 - 4); // 2/3 of screen, account for window borders
+        int max_scroll = std::max(0, line_count - visible_height);
+        
+        detail_view_scroll_offset_ = std::min(max_scroll, detail_view_scroll_offset_ + count);
+    }
+}
+
+void MainWindow::DetailViewPageUp() {
+    if (!detail_view_focused_) return;
+    
+    int available_height = (window_height_ > 0) ? window_height_ : 30; // Fallback to 30 lines
+    int content_height = available_height - 2; // Exclude status bars
+    int page_size = std::max(5, ((content_height * 2) / 3 - 4) / 2); // Half of visible height
+    DetailViewScrollUp(page_size);
+}
+
+void MainWindow::DetailViewPageDown() {
+    if (!detail_view_focused_) return;
+    
+    int available_height = (window_height_ > 0) ? window_height_ : 30; // Fallback to 30 lines
+    int content_height = available_height - 2; // Exclude status bars
+    int page_size = std::max(5, ((content_height * 2) / 3 - 4) / 2); // Half of visible height
+    DetailViewScrollDown(page_size);
+}
+
+void MainWindow::DetailViewHalfPageUp() {
+    if (!detail_view_focused_) return;
+    
+    int available_height = (window_height_ > 0) ? window_height_ : 30; // Fallback to 30 lines
+    int content_height = available_height - 2; // Exclude status bars
+    int half_page_size = std::max(2, ((content_height * 2) / 3 - 4) / 4); // Quarter of visible height
+    DetailViewScrollUp(half_page_size);
+}
+
+void MainWindow::DetailViewHalfPageDown() {
+    if (!detail_view_focused_) return;
+    
+    int available_height = (window_height_ > 0) ? window_height_ : 30; // Fallback to 30 lines
+    int content_height = available_height - 2; // Exclude status bars
+    int half_page_size = std::max(2, ((content_height * 2) / 3 - 4) / 4); // Quarter of visible height
+    DetailViewScrollDown(half_page_size);
+}
+
+void MainWindow::DetailViewScrollToTop() {
+    if (!detail_view_focused_) return;
+    
+    detail_view_scroll_offset_ = 0;
+}
+
+void MainWindow::DetailViewScrollToBottom() {
+    if (!detail_view_focused_) return;
+    
+    // Get the current entry to calculate max scroll
+    if (selected_entry_index_ >= 0 && selected_entry_index_ < static_cast<int>(filtered_entries_.size())) {
+        const auto& selected_entry = filtered_entries_[selected_entry_index_];
+        std::string full_message = selected_entry.Get_message();
+        
+        // Count lines in the message
+        int line_count = 1;
+        for (char c : full_message) {
+            if (c == '\n') line_count++;
+        }
+        
+        int available_height = (window_height_ > 0) ? window_height_ : 30; // Fallback to 30 lines
+        int content_height = available_height - 2; // Exclude status bars
+        int visible_height = std::max(10, (content_height * 2) / 3 - 4); // 2/3 of screen, account for window borders
+        detail_view_scroll_offset_ = std::max(0, line_count - visible_height);
+    }
 }
 
 } // namespace ue_log

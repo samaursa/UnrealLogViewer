@@ -120,6 +120,9 @@ add_executable(unreal_log_tests
   tests/test_relative_line_number_system.cpp
   tests/test_column_spacing.cpp
   tests/test_visual_hierarchy_comprehensive.cpp
+  tests/test_visual_polish_integration.cpp
+  tests/test_multiline_parsing.cpp
+  tests/test_detail_view_focus.cpp
 )
 
 # Link test application dependencies
