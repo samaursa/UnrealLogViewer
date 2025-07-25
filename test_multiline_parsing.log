@@ -1,0 +1,8 @@
+[2024.09.30-14.56.10:293][ 12]LogD3D12RHI: Error: [GPUBreadCrumb]	3D Queue 0
+Breadcrumbs: > Frame 18010 [Active]
+Breadcrumbs: | BufferPoolCopyOps [Finished]
+Breadcrumbs: | TexturePoolCopyOps [Finished]
+[2024.09.30-14.56.11:294][ 13]LogEngine: Display: Another log entry
+Some continuation line
+Another continuation line
+[2024.09.30-14.56.12:295][ 14]LogCore: Warning: Final entry

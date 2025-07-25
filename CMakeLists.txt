@@ -201,6 +201,84 @@ target_link_libraries(test_visual_hierarchy
   PRIVATE ftxui::component
 )
 
+# Create a basic tailing test executable
+add_executable(test_tailing_basic
+  test_tailing_basic.cpp
+)
+
+# Link tailing test dependencies
+target_link_libraries(test_tailing_basic
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a G key tailing test executable
+add_executable(test_g_key_tailing
+  test_g_key_tailing.cpp
+)
+
+# Link G key tailing test dependencies
+target_link_libraries(test_g_key_tailing
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a tailing navigation test executable
+add_executable(test_tailing_navigation
+  test_tailing_navigation.cpp
+)
+
+# Link tailing navigation test dependencies
+target_link_libraries(test_tailing_navigation
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a G key debug test executable
+add_executable(test_g_key_debug
+  test_g_key_debug.cpp
+)
+
+# Link G key debug test dependencies
+target_link_libraries(test_g_key_debug
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a G key interactive test executable
+add_executable(test_g_key_interactive
+  test_g_key_interactive.cpp
+)
+
+# Link G key interactive test dependencies
+target_link_libraries(test_g_key_interactive
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a G key visual test executable
+add_executable(test_g_key_visual
+  test_g_key_visual.cpp
+)
+
+# Link G key visual test dependencies
+target_link_libraries(test_g_key_visual
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
 # Install targets
 install(TARGETS unreal_log_viewer DESTINATION bin)
 install(TARGETS unreal_log_tests DESTINATION bin)

@@ -5,6 +5,7 @@
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
+#include <ftxui/component/animation.hpp>
 #include <ftxui/dom/elements.hpp>
 #include <CLI/CLI.hpp>
 #include <iostream>
@@ -132,6 +133,14 @@ int main(int argc, char* argv[]) {
         // Set up exit callback
         main_window->SetExitCallback([&]() {
             screen.Exit();
+        });
+        
+        // Set up refresh callback to wake up the UI when new log entries arrive
+        main_window->SetRefreshCallback([&]() {
+            // Request animation frame to wake up the UI loop and trigger a refresh
+            // This ensures the UI updates immediately when new log entries are detected,
+            // even when the terminal window is not in focus
+            ftxui::animation::RequestAnimationFrame();
         });
         
         // Create the FTXUI component

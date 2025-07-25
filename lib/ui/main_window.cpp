@@ -362,9 +362,15 @@ public:
             }
         }
         
-        // Vim-style 'G' goes to bottom of file
+        // Vim-style 'G' goes to end and starts tailing mode
         if (event == Event::Character('G')) {
+            // First go to the end of the log
             parent_->ScrollToBottom();
+            
+            // Then start tailing if not already active (no additional effect)
+            if (!parent_->IsTailing()) {
+                parent_->StartTailing();
+            }
             return true;
         }
         
@@ -513,6 +519,11 @@ public:
         
         // Navigation keys - check if filter panel has focus first
         if (event == Event::ArrowUp || event == Event::Character('k')) {
+            // Check if tailing should be stopped for navigation events
+            if (parent_->IsTailing() && parent_->ShouldStopTailing(event)) {
+                parent_->StopTailing();
+            }
+            
             // Check focus priority: Detail View -> Filter Panel -> Main Window
             if (parent_->IsDetailViewFocused()) {
                 parent_->DetailViewScrollUp();
@@ -527,6 +538,11 @@ public:
             return true;
         }
         if (event == Event::ArrowDown || event == Event::Character('j')) {
+            // Check if tailing should be stopped for navigation events
+            if (parent_->IsTailing() && parent_->ShouldStopTailing(event)) {
+                parent_->StopTailing();
+            }
+            
             // Check focus priority: Detail View -> Filter Panel -> Main Window
             if (parent_->IsDetailViewFocused()) {
                 parent_->DetailViewScrollDown();
@@ -541,6 +557,11 @@ public:
             return true;
         }
         if (event == Event::PageUp) {
+            // Check if tailing should be stopped for navigation events
+            if (parent_->IsTailing() && parent_->ShouldStopTailing(event)) {
+                parent_->StopTailing();
+            }
+            
             if (parent_->IsDetailViewFocused()) {
                 parent_->DetailViewPageUp();
                 return true;
@@ -549,6 +570,11 @@ public:
             return true;
         }
         if (event == Event::PageDown) {
+            // Check if tailing should be stopped for navigation events
+            if (parent_->IsTailing() && parent_->ShouldStopTailing(event)) {
+                parent_->StopTailing();
+            }
+            
             if (parent_->IsDetailViewFocused()) {
                 parent_->DetailViewPageDown();
                 return true;
@@ -559,6 +585,11 @@ public:
         
         // Vim-style half-page navigation
         if (event == Event::Character(static_cast<char>(4))) { // Ctrl+D (ASCII 4)
+            // Check if tailing should be stopped for navigation events
+            if (parent_->IsTailing() && parent_->ShouldStopTailing(event)) {
+                parent_->StopTailing();
+            }
+            
             if (parent_->IsDetailViewFocused()) {
                 parent_->DetailViewHalfPageDown();
                 return true;
@@ -567,6 +598,11 @@ public:
             return true;
         }
         if (event == Event::Character(static_cast<char>(21))) { // Ctrl+U (ASCII 21)
+            // Check if tailing should be stopped for navigation events
+            if (parent_->IsTailing() && parent_->ShouldStopTailing(event)) {
+                parent_->StopTailing();
+            }
+            
             if (parent_->IsDetailViewFocused()) {
                 parent_->DetailViewHalfPageUp();
                 return true;
@@ -771,9 +807,62 @@ bool MainWindow::ReloadLogFile() {
     return LoadLogFile(current_file_path_);
 }
 
+bool MainWindow::StartTailing() {
+    // Check if file is loaded
+    if (current_file_path_.empty()) {
+        last_error_ = "No file loaded - cannot start tailing";
+        return false;
+    }
+    
+    // Set tailing state
+    is_tailing_ = true;
+    auto_scroll_enabled_ = true;
+    
+    // Set up FileMonitor callback to OnNewLogLines
+    file_monitor_->SetCallback([this](const std::string& file_path, const std::vector<std::string>& new_lines) {
+        OnNewLogLines(new_lines);
+    });
+    
+    // Configure faster polling for more responsive tailing (50ms instead of default 100ms)
+    file_monitor_->SetPollInterval(std::chrono::milliseconds(50));
+    
+    // Start monitoring the current file only if not already monitoring
+    if (!file_monitor_->IsMonitoring()) {
+        auto result = file_monitor_->StartMonitoring(current_file_path_);
+        if (result.IsError()) {
+            // Reset tailing state on failure
+            is_tailing_ = false;
+            auto_scroll_enabled_ = false;
+            last_error_ = "Failed to start file monitoring: " + result.Get_error_message();
+            return false;
+        }
+    }
+    
+    // Update UI status to show "LIVE" indicator
+    last_error_ = "LIVE - Tailing " + std::filesystem::path(current_file_path_).filename().string();
+    
+    return true;
+}
+
 bool MainWindow::StartRealTimeMonitoring() {
     // Placeholder implementation
     return true;
+}
+
+void MainWindow::StopTailing() {
+    // Set tailing state to false
+    is_tailing_ = false;
+    auto_scroll_enabled_ = false;
+    
+    // Keep FileMonitor running but disable auto-scroll behavior
+    // (FileMonitor continues to run, we just don't auto-scroll)
+    
+    // Update UI status to show "STATIC" indicator
+    if (!current_file_path_.empty()) {
+        last_error_ = "STATIC - " + std::filesystem::path(current_file_path_).filename().string();
+    } else {
+        last_error_ = "STATIC - No file loaded";
+    }
 }
 
 void MainWindow::StopRealTimeMonitoring() {
@@ -902,13 +991,6 @@ void MainWindow::CloseCurrentFile() {
 }
 
 // Navigation methods for tests
-void MainWindow::StartTailing() {
-    StartRealTimeMonitoring();
-}
-
-void MainWindow::StopTailing() {
-    StopRealTimeMonitoring();
-}
 
 void MainWindow::RefreshDisplay() {
     // Trigger a refresh - placeholder implementation
@@ -917,6 +999,12 @@ void MainWindow::RefreshDisplay() {
 void MainWindow::SetTerminalSize(int width, int height) {
     window_width_ = width;
     window_height_ = height;
+}
+
+void MainWindow::SetTailingPollInterval(int milliseconds) {
+    if (file_monitor_) {
+        file_monitor_->SetPollInterval(std::chrono::milliseconds(milliseconds));
+    }
 }
 
 void MainWindow::GoToTop() {
@@ -932,10 +1020,18 @@ void MainWindow::GoToLine(int line_number) {
 }
 
 void MainWindow::SelectNextEntry() {
+    // Check if tailing should be stopped for navigation events
+    if (IsTailing()) {
+        StopTailing();
+    }
     ScrollDown(1);
 }
 
 void MainWindow::SelectPreviousEntry() {
+    // Check if tailing should be stopped for navigation events
+    if (IsTailing()) {
+        StopTailing();
+    }
     ScrollUp(1);
 }
 
@@ -979,6 +1075,11 @@ void MainWindow::PageDown() {
 }
 
 void MainWindow::HalfPageUp() {
+    // Check if tailing should be stopped for navigation events
+    if (IsTailing()) {
+        StopTailing();
+    }
+    
     // Use the same visible height as in RenderLogTable for consistency
     int visible_height = GetVisibleHeight();
     int half_page_size = std::max(1, visible_height / 2);
@@ -986,6 +1087,11 @@ void MainWindow::HalfPageUp() {
 }
 
 void MainWindow::HalfPageDown() {
+    // Check if tailing should be stopped for navigation events
+    if (IsTailing()) {
+        StopTailing();
+    }
+    
     // Use the same visible height as in RenderLogTable for consistency
     int visible_height = GetVisibleHeight();
     int half_page_size = std::max(1, visible_height / 2);
@@ -999,6 +1105,70 @@ void MainWindow::ScrollToTop() {
 void MainWindow::ScrollToBottom() {
     if (!filtered_entries_.empty()) {
         SelectEntry(static_cast<int>(filtered_entries_.size()) - 1);
+    }
+}
+
+void MainWindow::AutoScrollToBottom() {
+    // Only auto-scroll when tailing is active
+    if (!is_tailing_ || !auto_scroll_enabled_) {
+        return;
+    }
+    
+    // Update scroll_offset_ to show latest entries
+    if (!filtered_entries_.empty()) {
+        // Calculate the scroll offset to show the last entry
+        int visible_height = GetVisibleHeight();
+        int total_entries = static_cast<int>(filtered_entries_.size());
+        
+        if (total_entries > visible_height) {
+            scroll_offset_ = total_entries - visible_height;
+        } else {
+            scroll_offset_ = 0;
+        }
+        
+        // Update selected_entry_index_ to last entry if needed
+        selected_entry_index_ = total_entries - 1;
+    }
+}
+
+void MainWindow::OnNewLogLines(const std::vector<std::string>& new_lines) {
+    // Early return if not tailing or no file loaded
+    if (!is_tailing_ || current_file_path_.empty()) {
+        return;
+    }
+    
+    // Handle empty or invalid input
+    if (new_lines.empty()) {
+        return;
+    }
+    
+    // Use existing LogParser to parse new line strings into LogEntry objects
+    try {
+        size_t current_line_num = log_entries_.size() + 1; // Continue line numbering
+        
+        for (const auto& line : new_lines) {
+            auto entry = log_parser_->ParseSingleEntry(line, current_line_num);
+            // Add new entry to log_entries_ vector
+            log_entries_.push_back(entry);
+            current_line_num++;
+        }
+        
+        // Apply current filters to update filtered_entries_
+        OnFiltersChanged();
+        
+        // Auto-scroll to bottom if auto-scroll is enabled
+        if (auto_scroll_enabled_) {
+            AutoScrollToBottom();
+        }
+        
+        // Trigger screen refresh only when new entries are added
+        if (refresh_callback_) {
+            refresh_callback_();
+        }
+        
+    } catch (const std::exception& e) {
+        // Handle parsing errors gracefully without stopping tailing
+        last_error_ = "LIVE - Parse error: " + std::string(e.what());
     }
 }
 
@@ -1538,10 +1708,7 @@ void MainWindow::EnsureSelectionVisible() {
     scroll_offset_ = std::min(scroll_offset_, max_offset);
 }
 
-// Placeholder implementations for methods that don't exist in backend yet
-void MainWindow::OnNewLogLines(const std::vector<std::string>& new_lines) {
-    // Placeholder - will be implemented when backend supports it
-}
+
 
 void MainWindow::OnFiltersChanged() {
     // Check if we have hierarchical filters (contextual filters) and apply those
@@ -2070,6 +2237,11 @@ bool MainWindow::HandleVimStyleNavigation(const std::string& input) {
 }
 
 void MainWindow::ExecuteVimNavigation(int count, char direction) {
+    // Check if tailing should be stopped for j/k navigation events
+    if (IsTailing()) {
+        StopTailing();
+    }
+    
     if (direction == 'j') {
         // Move down
         ScrollDown(count);
@@ -3221,6 +3393,27 @@ void MainWindow::DetailViewScrollToBottom() {
         int visible_height = std::max(10, (content_height * 2) / 3 - 4); // 2/3 of screen, account for window borders
         detail_view_scroll_offset_ = std::max(0, line_count - visible_height);
     }
+}
+
+bool MainWindow::ShouldStopTailing(const ftxui::Event& event) const {
+    // Check for navigation events that should stop tailing
+    if (event == ftxui::Event::Character('j') || event == ftxui::Event::Character('k')) {
+        return true;
+    }
+    if (event == ftxui::Event::ArrowUp || event == ftxui::Event::ArrowDown) {
+        return true;
+    }
+    if (event == ftxui::Event::Character(static_cast<char>(4))) { // Ctrl+D
+        return true;
+    }
+    if (event == ftxui::Event::Character(static_cast<char>(21))) { // Ctrl+U
+        return true;
+    }
+    if (event == ftxui::Event::PageUp || event == ftxui::Event::PageDown) {
+        return true;
+    }
+    
+    return false;
 }
 
 } // namespace ue_log

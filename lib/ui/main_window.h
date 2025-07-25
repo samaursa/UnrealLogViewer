@@ -140,15 +140,20 @@ public:
     // Methods expected by tests (compatibility layer)
     const std::vector<LogEntry>& GetDisplayedEntries() const { return filtered_entries_; }
     int GetSelectedEntryIndex() const { return selected_entry_index_; }
-    bool IsTailing() const { return IsRealTimeMonitoringActive(); }
+    bool IsTailing() const { return is_tailing_; }
     void ReloadCurrentFile() { ReloadLogFile(); }
     void CloseCurrentFile();
     
     // Navigation methods for tests
-    void StartTailing();
+    bool StartTailing();
     void StopTailing();
+    
+    // Tailing helper methods
+    bool ShouldStopTailing(const ftxui::Event& event) const;
+    void AutoScrollToBottom();
     void RefreshDisplay();
     void SetTerminalSize(int width, int height);
+    void SetTailingPollInterval(int milliseconds);
     void GoToTop();
     void GoToBottom();
     void GoToLine(int line_number);
@@ -184,6 +189,14 @@ public:
      */
     void SetExitCallback(std::function<void()> callback) {
         exit_callback_ = std::move(callback);
+    }
+    
+    /**
+     * Set the refresh callback function for triggering screen updates.
+     * @param callback Function to call when the screen should be refreshed.
+     */
+    void SetRefreshCallback(std::function<void()> callback) {
+        refresh_callback_ = std::move(callback);
     }
     
     /**
@@ -402,8 +415,13 @@ private:
     std::string vim_command_buffer_;  // Buffer for accumulating vim commands like "5j"
     bool vim_command_mode_ = false;   // True when accumulating a vim command
     
+    // Tailing state
+    bool is_tailing_ = false;         // Whether tailing mode is active
+    bool auto_scroll_enabled_ = false; // Whether auto-scroll is enabled during tailing
+    
     // Callbacks
     std::function<void()> exit_callback_;
+    std::function<void()> refresh_callback_;
     
     // Event handlers
     void OnNewLogLines(const std::vector<std::string>& new_lines);
@@ -419,6 +437,8 @@ private:
     ftxui::Element RenderStatusBar() const;
     ftxui::Element RenderFilterPanel() const;
     ftxui::Element RenderHelpDialog() const;
+    
+
     
     // Rendering helpers
     ftxui::Element RenderLogEntry(const LogEntry& entry, bool is_selected) const;
