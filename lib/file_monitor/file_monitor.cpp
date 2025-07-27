@@ -254,14 +254,43 @@ namespace ue_log {
             // Seek to last read position
             file.seekg(last_read_position);
             
+            // Check if seek was successful
+            if (file.fail()) {
+                file.clear(); // Clear error flags
+                file.seekg(0, std::ios::end); // Go to end of file
+                last_read_position = file.tellg();
+                return new_lines; // No new lines to read
+            }
+            
             std::string line;
+            std::streampos line_start_pos = file.tellg();
+            
             while (std::getline(file, line)) {
                 new_lines.push_back(line);
                 total_lines_processed++;
+                
+                // Update position after each successful line read
+                // This ensures we don't lose track even if tellg() fails later
+                line_start_pos = file.tellg();
             }
             
-            // Update last read position
-            last_read_position = file.tellg();
+            // Update last read position - handle EOF case properly
+            if (file.eof()) {
+                // If we hit EOF, the position should be at the end
+                file.clear(); // Clear EOF flag
+                file.seekg(0, std::ios::end);
+                last_read_position = file.tellg();
+            } else {
+                // Use the last successful position we tracked
+                last_read_position = line_start_pos;
+            }
+            
+            // Validate the position - if it's invalid, reset to end of file
+            if (last_read_position == std::streampos(-1)) {
+                file.clear();
+                file.seekg(0, std::ios::end);
+                last_read_position = file.tellg();
+            }
             
         } catch (const std::exception& e) {
             // Return empty vector on error
@@ -291,13 +320,16 @@ namespace ue_log {
             std::filesystem::file_time_type current_write_time;
             
             if (GetFileInfo(current_size, current_write_time).IsSuccess()) {
-                last_file_size = current_size;
-                last_write_time = current_write_time;
-                
-                // If file is smaller than before, it might have been rotated
-                if (current_size < static_cast<std::uintmax_t>(last_read_position)) {
+                // Only detect file rotation if the file is significantly smaller than our read position
+                // This prevents false positives from timing issues during normal file appends
+                if (current_size < static_cast<std::uintmax_t>(last_read_position) && 
+                    current_size < last_file_size) {
+                    // File was actually truncated or rotated - reset read position
                     HandleFileRotation();
                 }
+                
+                last_file_size = current_size;
+                last_write_time = current_write_time;
             }
         } catch (const std::exception& e) {
             // Ignore errors in state update

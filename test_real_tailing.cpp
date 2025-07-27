@@ -7,12 +7,14 @@
 
 int main() {
     try {
-        // Create a test log file with initial content
-        std::string test_file = "test_poll_interval.log";
+        // Create a test log file with properly formatted Unreal log entries
+        std::string test_file = "test_real_tailing.log";
         std::ofstream file(test_file);
-        file << "[2024-01-01 10:00:01] Info: Initial entry 1\n";
-        file << "[2024-01-01 10:00:02] Info: Initial entry 2\n";
-        file << "[2024-01-01 10:00:03] Info: Initial entry 3\n";
+        
+        // Create properly formatted Unreal log entries
+        file << "[2024.09.30-14.22.24:342][  0]LogInit: Display: Initial entry 1\n";
+        file << "[2024.09.30-14.22.24:343][  1]LogWindows: Display: Initial entry 2\n";
+        file << "[2024.09.30-14.22.24:344][  2]LogCore: Warning: Initial entry 3\n";
         file.close();
         
         // Create MainWindow instance
@@ -36,39 +38,45 @@ int main() {
         
         std::cout << "Tailing started. Entries: " << window.GetDisplayedEntries().size() << std::endl;
         
-        // Add one new line and see what happens
+        // Add one properly formatted new line
         std::ofstream append_file(test_file, std::ios::app);
-        append_file << "[2024-01-01 10:00:04] Info: New entry 4\n";
+        append_file << "[2024.09.30-14.22.24:345][  3]LogCore: Display: New entry 4\n";
         append_file.close();
         
         // Wait for file monitor to detect the change
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
         
         std::cout << "After adding 1 line - Entries: " << window.GetDisplayedEntries().size() << std::endl;
         
-        // Add another line
+        // Add another properly formatted line
         std::ofstream append_file2(test_file, std::ios::app);
-        append_file2 << "[2024-01-01 10:00:05] Info: New entry 5\n";
+        append_file2 << "[2024.09.30-14.22.24:346][  4]LogCore: Display: New entry 5\n";
         append_file2.close();
         
         // Wait for file monitor to detect the change
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
         
         std::cout << "After adding 2nd line - Entries: " << window.GetDisplayedEntries().size() << std::endl;
         
         // Expected: 3 initial + 1 + 1 = 5 entries
-        // If bug exists: we'll see much more than 5
+        int expected = 5;
+        int actual = static_cast<int>(window.GetDisplayedEntries().size());
         
-        if (window.GetDisplayedEntries().size() == 5) {
-            std::cout << "✓ PASS: Correct number of entries (5)" << std::endl;
+        if (actual == expected) {
+            std::cout << "✓ PASS: Correct number of entries (" << expected << ")" << std::endl;
         } else {
-            std::cout << "✗ FAIL: Expected 5 entries, got " << window.GetDisplayedEntries().size() << std::endl;
+            std::cout << "✗ FAIL: Expected " << expected << " entries, got " << actual << std::endl;
+            
+            // If we got way more than expected, it suggests the bug is present
+            if (actual > expected * 2) {
+                std::cout << "  This suggests the full file re-read bug is present!" << std::endl;
+            }
         }
         
         // Clean up
         std::filesystem::remove(test_file);
         
-        return 0;
+        return (actual == expected) ? 0 : 1;
         
     } catch (const std::exception& e) {
         std::cerr << "Exception: " << e.what() << std::endl;

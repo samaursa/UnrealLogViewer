@@ -444,44 +444,18 @@ namespace ue_log {
         std::vector<std::string> lines = SplitIntoLines(start_offset);
         size_t line_number = current_line_number;
         
-        // Pre-allocate memory for entries to avoid reallocations
-        entries.reserve(lines.size() / 2); // Estimate fewer entries due to grouping
+        // Pre-allocate memory for entries - now 1:1 with lines
+        entries.reserve(lines.size());
         
+        // TEMPORARY: Treat every line as a separate entry (disable multiline parsing)
         for (size_t i = 0; i < lines.size(); i++) {
             const std::string& line = lines[i];
             
-            if (IsValidLogLine(line) && HasTimestamp(line)) {
-                // This is a new log entry with timestamp
-                LogEntry entry = ParseSingleEntry(line, line_number + i);
-                
-                // Look ahead for continuation lines (lines without timestamps)
-                std::string combined_message = entry.Get_message();
-                size_t j = i + 1;
-                
-                while (j < lines.size() && !lines[j].empty() && !HasTimestamp(lines[j])) {
-                    // This is a continuation line - append it to the message
-                    combined_message += "\n" + lines[j];
-                    j++;
-                }
-                
-                // Create a new entry with the combined message
-                LogEntry combined_entry(
-                    entry.Get_entry_type(),
-                    entry.Get_timestamp(),
-                    entry.Get_frame_number(),
-                    entry.Get_logger_name(),
-                    entry.Get_log_level(),
-                    combined_message,
-                    entry.Get_raw_line(), // Keep original raw line for the main entry
-                    entry.Get_line_number()
-                );
-                
-                entries.push_back(combined_entry);
-                
-                // Skip the continuation lines we just processed
-                i = j - 1; // -1 because the for loop will increment
+            if (!line.empty()) {
+                // Parse every non-empty line as a separate entry
+                LogEntry entry = ParseSingleEntry(line, line_number + i + 1);
+                entries.push_back(entry);
             }
-            // Skip lines that don't have timestamps (they should be handled as continuations)
         }
         
         // Update parsed entries

@@ -88,27 +88,38 @@
     - Continue with normal page navigation after stopping tailing
     - _Requirements: 2.2, 2.4_
 
-- [ ] 5. Implement OnNewLogLines callback method
-  - [ ] 5.1 Create OnNewLogLines method signature and basic structure
+- [x] 5. Implement OnNewLogLines callback method
+
+
+
+  - [x] 5.1 Create OnNewLogLines method signature and basic structure
+
     - Accept vector of new line strings as parameter
     - Add error handling for empty or invalid input
     - Add early return if not tailing or no file loaded
     - _Requirements: 1.2, 4.4_
 
-  - [ ] 5.2 Implement log parsing for new lines
+  - [x] 5.2 Implement log parsing for new lines
+
     - Use existing LogParser to parse new line strings into LogEntry objects
     - Handle parsing errors gracefully without stopping tailing
     - Add new entries to log_entries_ vector
     - _Requirements: 1.2, 4.4_
 
-- [ ] 6. Implement auto-scroll functionality
-  - [ ] 6.1 Create AutoScrollToBottom method
+- [x] 6. Implement auto-scroll functionality
+
+
+  - [x] 6.1 Create AutoScrollToBottom method
+
+
     - Calculate if auto-scroll should occur (only when tailing is active)
     - Update scroll_offset_ to show latest entries
     - Update selected_entry_index_ to last entry if needed
     - _Requirements: 1.2, 5.1_
 
-  - [ ] 6.2 Integrate auto-scroll with OnNewLogLines
+  - [x] 6.2 Integrate auto-scroll with OnNewLogLines
+
+
     - Call AutoScrollToBottom() after processing new entries
     - Ensure auto-scroll only happens when auto_scroll_enabled_ is true
     - Add performance throttling to prevent excessive scrolling

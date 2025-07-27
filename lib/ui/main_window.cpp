@@ -756,6 +756,11 @@ bool MainWindow::LoadLogFile(const std::string& file_path) {
         return false;
     }
     
+    // Stop existing file monitoring if running (for clean reload)
+    if (file_monitor_ && file_monitor_->IsMonitoring()) {
+        file_monitor_->StopMonitoring();
+    }
+    
     // Store the file path
     current_file_path_ = file_path;
     
@@ -790,6 +795,9 @@ bool MainWindow::LoadLogFile(const std::string& file_path) {
         scroll_offset_ = 0;
         selected_entry_index_ = 0;
         
+        // Start FileMonitor to watch for changes (but don't enable tailing/auto-scroll)
+        StartFileMonitoring();
+        
         return true;
         
     } catch (const std::exception& e) {
@@ -818,25 +826,13 @@ bool MainWindow::StartTailing() {
     is_tailing_ = true;
     auto_scroll_enabled_ = true;
     
-    // Set up FileMonitor callback to OnNewLogLines
-    file_monitor_->SetCallback([this](const std::string& file_path, const std::vector<std::string>& new_lines) {
-        OnNewLogLines(new_lines);
-    });
+    // Ensure FileMonitor is running (it should already be running from LoadLogFile)
+    if (!file_monitor_->IsMonitoring()) {
+        StartFileMonitoring();
+    }
     
     // Configure faster polling for more responsive tailing (50ms instead of default 100ms)
     file_monitor_->SetPollInterval(std::chrono::milliseconds(50));
-    
-    // Start monitoring the current file only if not already monitoring
-    if (!file_monitor_->IsMonitoring()) {
-        auto result = file_monitor_->StartMonitoring(current_file_path_);
-        if (result.IsError()) {
-            // Reset tailing state on failure
-            is_tailing_ = false;
-            auto_scroll_enabled_ = false;
-            last_error_ = "Failed to start file monitoring: " + result.Get_error_message();
-            return false;
-        }
-    }
     
     // Update UI status to show "LIVE" indicator
     last_error_ = "LIVE - Tailing " + std::filesystem::path(current_file_path_).filename().string();
@@ -854,8 +850,10 @@ void MainWindow::StopTailing() {
     is_tailing_ = false;
     auto_scroll_enabled_ = false;
     
-    // Keep FileMonitor running but disable auto-scroll behavior
-    // (FileMonitor continues to run, we just don't auto-scroll)
+    // Keep FileMonitor running but revert to slower polling for background monitoring
+    if (file_monitor_) {
+        file_monitor_->SetPollInterval(std::chrono::milliseconds(100));
+    }
     
     // Update UI status to show "STATIC" indicator
     if (!current_file_path_.empty()) {
@@ -986,8 +984,13 @@ void MainWindow::CloseCurrentFile() {
     scroll_offset_ = 0;
     last_error_.clear();
     
-    // Stop any real-time monitoring
+    // Stop any real-time monitoring and file monitoring
     StopRealTimeMonitoring();
+    StopFileMonitoring();
+    
+    // Reset tailing state
+    is_tailing_ = false;
+    auto_scroll_enabled_ = false;
 }
 
 // Navigation methods for tests
@@ -1005,6 +1008,153 @@ void MainWindow::SetTailingPollInterval(int milliseconds) {
     if (file_monitor_) {
         file_monitor_->SetPollInterval(std::chrono::milliseconds(milliseconds));
     }
+}
+
+void MainWindow::StartFileMonitoring() {
+    if (current_file_path_.empty() || !file_monitor_) {
+        return;
+    }
+    
+    // Only set up callback and start monitoring if not already running
+    if (!file_monitor_->IsMonitoring()) {
+        // Set up FileMonitor callback to OnNewLogLines
+        file_monitor_->SetCallback([this](const std::string& file_path, const std::vector<std::string>& new_lines) {
+            OnNewLogLines(new_lines);
+        });
+        
+        // Configure poll interval (default 100ms for background monitoring)
+        file_monitor_->SetPollInterval(std::chrono::milliseconds(100));
+        
+        auto result = file_monitor_->StartMonitoring(current_file_path_);
+        if (result.IsError()) {
+            last_error_ = "Failed to start file monitoring: " + result.Get_error_message();
+        }
+    }
+    // If already monitoring, don't change anything to avoid disrupting the state
+}
+
+void MainWindow::StopFileMonitoring() {
+    if (file_monitor_ && file_monitor_->IsMonitoring()) {
+        file_monitor_->StopMonitoring();
+    }
+}
+
+void MainWindow::ApplyFiltersToNewEntries(const std::vector<LogEntry>& new_entries) {
+    if (!filter_engine_) {
+        // No filter engine - just append all new entries
+        filtered_entries_.insert(filtered_entries_.end(), new_entries.begin(), new_entries.end());
+        return;
+    }
+    
+    // Check if we have hierarchical filters (contextual filters)
+    if (current_filter_expression_ && !current_filter_expression_->IsEmpty()) {
+        // Apply hierarchical filters to new entries only
+        for (const auto& entry : new_entries) {
+            if (current_filter_expression_->Matches(entry)) {
+                filtered_entries_.push_back(entry);
+            }
+        }
+    } else {
+        // Apply traditional filters to new entries only
+        const auto& filters = filter_engine_->Get_primary_filters();
+        
+        // Check if there are any active filters
+        bool has_active_filters = false;
+        for (const auto& filter : filters) {
+            if (filter->Get_is_active()) {
+                has_active_filters = true;
+                break;
+            }
+        }
+        
+        if (!has_active_filters) {
+            // No active filters - append all new entries
+            filtered_entries_.insert(filtered_entries_.end(), new_entries.begin(), new_entries.end());
+        } else {
+            // Apply active filters to new entries
+            for (const auto& entry : new_entries) {
+                bool matches_any_filter = false;
+                
+                for (const auto& filter : filters) {
+                    if (filter->Get_is_active() && filter->Matches(entry)) {
+                        matches_any_filter = true;
+                        break;
+                    }
+                }
+                
+                if (matches_any_filter) {
+                    filtered_entries_.push_back(entry);
+                }
+            }
+        }
+    }
+    
+    // Handle context lines if needed - do this incrementally to avoid full rebuild
+    if (context_lines_ > 0) {
+        // For incremental updates with context, we need to add context around new matching entries
+        // This avoids the expensive full rebuild that OnFiltersChanged() would cause
+        ApplyContextToNewEntries(new_entries);
+    }
+}
+
+void MainWindow::ApplyContextToNewEntries(const std::vector<LogEntry>& new_entries) {
+    if (context_lines_ == 0 || new_entries.empty()) {
+        return; // No context needed or no new entries
+    }
+    
+    // For each new entry that was added to filtered_entries_, we need to check if we should
+    // add context lines around it. This is more complex than a full rebuild, but avoids
+    // the performance issue of re-processing the entire log.
+    
+    // Get the current size of filtered_entries_ before we start adding context
+    size_t original_filtered_size = filtered_entries_.size();
+    
+    // We need to be careful here - the filtered_entries_ already contains the new entries
+    // that passed the filter. We need to add context around those entries.
+    
+    // For incremental context, we'll use a simpler approach:
+    // 1. Find the positions of the new entries in the original log_entries_
+    // 2. Add context lines around those positions if they're not already in filtered_entries_
+    
+    std::set<size_t> entries_to_add; // Use set to avoid duplicates
+    
+    // Find positions of new entries in the original log
+    for (const auto& new_entry : new_entries) {
+        // Find this entry in log_entries_ to get its position
+        for (size_t i = 0; i < log_entries_.size(); ++i) {
+            if (log_entries_[i].Get_line_number() == new_entry.Get_line_number()) {
+                // Add context lines around this position
+                size_t start_pos = (i >= context_lines_) ? i - context_lines_ : 0;
+                size_t end_pos = std::min(i + context_lines_ + 1, log_entries_.size());
+                
+                for (size_t j = start_pos; j < end_pos; ++j) {
+                    entries_to_add.insert(j);
+                }
+                break;
+            }
+        }
+    }
+    
+    // Add the context entries that aren't already in filtered_entries_
+    // We need to check if each entry is already present to avoid duplicates
+    std::set<int> existing_line_numbers;
+    for (const auto& entry : filtered_entries_) {
+        existing_line_numbers.insert(entry.Get_line_number());
+    }
+    
+    // Add new context entries
+    for (size_t pos : entries_to_add) {
+        const auto& entry = log_entries_[pos];
+        if (existing_line_numbers.find(entry.Get_line_number()) == existing_line_numbers.end()) {
+            filtered_entries_.push_back(entry);
+        }
+    }
+    
+    // Sort filtered_entries_ by line number to maintain proper order
+    std::sort(filtered_entries_.begin(), filtered_entries_.end(), 
+              [](const LogEntry& a, const LogEntry& b) {
+                  return a.Get_line_number() < b.Get_line_number();
+              });
 }
 
 void MainWindow::GoToTop() {
@@ -1053,12 +1203,22 @@ bool MainWindow::OnEvent(ftxui::Event event) {
 }
 
 void MainWindow::ScrollUp(int count) {
+    // Check if tailing should be stopped for navigation events
+    if (IsTailing()) {
+        StopTailing();
+    }
+    
     if (selected_entry_index_ > 0) {
         SelectEntry(selected_entry_index_ - count);
     }
 }
 
 void MainWindow::ScrollDown(int count) {
+    // Check if tailing should be stopped for navigation events
+    if (IsTailing()) {
+        StopTailing();
+    }
+    
     if (selected_entry_index_ < static_cast<int>(filtered_entries_.size()) - 1) {
         SelectEntry(selected_entry_index_ + count);
     }
@@ -1114,26 +1274,40 @@ void MainWindow::AutoScrollToBottom() {
         return;
     }
     
-    // Update scroll_offset_ to show latest entries
+    // Throttle auto-scroll to prevent excessive updates (max 20 times per second)
+    auto now = std::chrono::steady_clock::now();
+    auto time_since_last_scroll = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_auto_scroll_time_);
+    if (time_since_last_scroll < std::chrono::milliseconds(50)) {
+        return; // Skip this auto-scroll to prevent excessive updates
+    }
+    last_auto_scroll_time_ = now;
+    
+    // Update selected_entry_index_ to show latest entries
     if (!filtered_entries_.empty()) {
-        // Calculate the scroll offset to show the last entry
-        int visible_height = GetVisibleHeight();
         int total_entries = static_cast<int>(filtered_entries_.size());
+        int visible_height = GetVisibleHeight();
         
+        // Set selected entry to the last entry
+        selected_entry_index_ = total_entries - 1;
+        
+        // Calculate scroll offset to ensure the last entry is visible but not past the screen
+        // The last entry should be at the bottom of the visible area, not below it
         if (total_entries > visible_height) {
+            // Position the last entry at the bottom of the visible area
             scroll_offset_ = total_entries - visible_height;
         } else {
+            // If we have fewer entries than visible height, no scrolling needed
             scroll_offset_ = 0;
         }
         
-        // Update selected_entry_index_ to last entry if needed
-        selected_entry_index_ = total_entries - 1;
+        // Ensure scroll_offset_ is never negative
+        scroll_offset_ = std::max(0, scroll_offset_);
     }
 }
 
 void MainWindow::OnNewLogLines(const std::vector<std::string>& new_lines) {
-    // Early return if not tailing or no file loaded
-    if (!is_tailing_ || current_file_path_.empty()) {
+    // Early return if no file loaded
+    if (current_file_path_.empty()) {
         return;
     }
     
@@ -1142,33 +1316,50 @@ void MainWindow::OnNewLogLines(const std::vector<std::string>& new_lines) {
         return;
     }
     
+
     // Use existing LogParser to parse new line strings into LogEntry objects
     try {
         size_t current_line_num = log_entries_.size() + 1; // Continue line numbering
+        std::vector<LogEntry> new_entries;
         
         for (const auto& line : new_lines) {
             auto entry = log_parser_->ParseSingleEntry(line, current_line_num);
             // Add new entry to log_entries_ vector
             log_entries_.push_back(entry);
+            new_entries.push_back(entry);
             current_line_num++;
         }
         
-        // Apply current filters to update filtered_entries_
-        OnFiltersChanged();
+        // Apply filters only to new entries and append to filtered_entries_
+        ApplyFiltersToNewEntries(new_entries);
         
-        // Auto-scroll to bottom if auto-scroll is enabled
-        if (auto_scroll_enabled_) {
+
+        // Auto-scroll to bottom ONLY if tailing is active and auto-scroll is enabled
+        if (is_tailing_ && auto_scroll_enabled_) {
             AutoScrollToBottom();
+            // Ensure the selection is visible after auto-scrolling
+            EnsureSelectionVisible();
         }
         
-        // Trigger screen refresh only when new entries are added
+        // Always trigger screen refresh when new entries are added (regardless of tailing state)
         if (refresh_callback_) {
             refresh_callback_();
         }
         
+        // Update status message based on tailing state
+        if (is_tailing_) {
+            last_error_ = "LIVE - Tailing " + std::filesystem::path(current_file_path_).filename().string();
+        } else {
+            last_error_ = "STATIC - " + std::filesystem::path(current_file_path_).filename().string() + " (updated)";
+        }
+        
     } catch (const std::exception& e) {
-        // Handle parsing errors gracefully without stopping tailing
-        last_error_ = "LIVE - Parse error: " + std::string(e.what());
+        // Handle parsing errors gracefully
+        if (is_tailing_) {
+            last_error_ = "LIVE - Parse error: " + std::string(e.what());
+        } else {
+            last_error_ = "STATIC - Parse error: " + std::string(e.what());
+        }
     }
 }
 
@@ -1217,7 +1408,7 @@ ftxui::Element MainWindow::RenderLogTable() const {
         int visible_height = GetVisibleHeight();
         int buffer = visible_height * 2; // Add buffer for smooth scrolling
         
-        // Calculate start and end indices with buffer
+        // Calculate start and end indices with buffer around selected entry
         int total_entries = static_cast<int>(filtered_entries_.size());
         int start_idx = std::max(0, std::min(selected_entry_index_ - buffer, total_entries - visible_height - buffer));
         int end_idx = std::min(total_entries, start_idx + visible_height + buffer * 2);

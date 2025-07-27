@@ -1,0 +1,5 @@
+[2024.09.30-14.22.24:342][  0]LogInit: Display: Initial entry 1
+[2024.09.30-14.22.24:343][  1]LogWindows: Display: Initial entry 2
+[2024.09.30-14.22.24:344][  2]LogCore: Warning: Initial entry 3
+[2024.09.30-14.22.24:345][  3]LogCore: Display: New entry 4
+[2024.09.30-14.22.24:346][  4]LogCore: Display: New entry 5

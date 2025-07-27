@@ -154,6 +154,10 @@ public:
     void RefreshDisplay();
     void SetTerminalSize(int width, int height);
     void SetTailingPollInterval(int milliseconds);
+    void StartFileMonitoring();
+    void StopFileMonitoring();
+    void ApplyFiltersToNewEntries(const std::vector<LogEntry>& new_entries);
+    void ApplyContextToNewEntries(const std::vector<LogEntry>& new_entries);
     void GoToTop();
     void GoToBottom();
     void GoToLine(int line_number);
@@ -418,6 +422,7 @@ private:
     // Tailing state
     bool is_tailing_ = false;         // Whether tailing mode is active
     bool auto_scroll_enabled_ = false; // Whether auto-scroll is enabled during tailing
+    std::chrono::steady_clock::time_point last_auto_scroll_time_; // For throttling auto-scroll
     
     // Callbacks
     std::function<void()> exit_callback_;

@@ -240,6 +240,19 @@ target_link_libraries(test_tailing_navigation
   PRIVATE ftxui::component
 )
 
+# Create a context incremental test executable
+add_executable(test_context_incremental
+  test_context_incremental.cpp
+)
+
+# Link context incremental test dependencies
+target_link_libraries(test_context_incremental
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
 # Create a G key debug test executable
 add_executable(test_g_key_debug
   test_g_key_debug.cpp
@@ -282,3 +295,67 @@ target_link_libraries(test_g_key_visual
 # Install targets
 install(TARGETS unreal_log_viewer DESTINATION bin)
 install(TARGETS unreal_log_tests DESTINATION bin)
+# Create a scroll fix test executable
+add_executable(test_scroll_fix
+  test_scroll_fix.cpp
+)
+
+# Link scroll fix test dependencies
+target_link_libraries(test_scroll_fix
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a simple scroll test executable
+add_executable(test_simple_scroll
+  test_simple_scroll.cpp
+)
+
+# Link simple scroll test dependencies
+target_link_libraries(test_simple_scroll
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a poll interval test executable
+add_executable(test_poll_interval
+  test_poll_interval.cpp
+)
+
+# Link poll interval test dependencies
+target_link_libraries(test_poll_interval
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a debug file monitor test executable
+add_executable(debug_file_monitor
+  debug_file_monitor.cpp
+)
+
+# Link debug file monitor test dependencies
+target_link_libraries(debug_file_monitor
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a real tailing test executable
+add_executable(test_real_tailing
+  test_real_tailing.cpp
+)
+
+# Link real tailing test dependencies
+target_link_libraries(test_real_tailing
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
