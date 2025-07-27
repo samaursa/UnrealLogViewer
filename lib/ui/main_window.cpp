@@ -453,7 +453,7 @@ public:
                     parent_->GetFilterPanel()->SetFocus(false);
                     if (parent_->IsDetailViewVisible()) {
                         parent_->FocusDetailView();
-                        parent_->SetLastError("Detail view focused - j/k to scroll, ESC to unfocus");
+                        parent_->SetLastError("Detail view focused - J/K to scroll, ESC to unfocus");
                     } else {
                         parent_->SetLastError("Main window focused - use arrow keys to navigate logs");
                     }
@@ -477,7 +477,7 @@ public:
                     parent_->SetLastError("Main window focused - use arrow keys to navigate logs");
                 } else if (parent_->IsDetailViewVisible()) {
                     parent_->FocusDetailView();
-                    parent_->SetLastError("Detail view focused - j/k to scroll, ESC to unfocus");
+                    parent_->SetLastError("Detail view focused - J/K to scroll, ESC to unfocus");
                 }
             }
             return true;
@@ -517,19 +517,33 @@ public:
         
 
         
-        // Navigation keys - check if filter panel has focus first
+        // Detail view navigation keys (J/K - capital letters only)
+        if (event == Event::Character('J')) {
+            if (parent_->IsDetailViewFocused()) {
+                parent_->DetailViewScrollDown();
+                return true;
+            }
+            // If detail view is not focused, ignore J key
+            return true;
+        }
+        if (event == Event::Character('K')) {
+            if (parent_->IsDetailViewFocused()) {
+                parent_->DetailViewScrollUp();
+                return true;
+            }
+            // If detail view is not focused, ignore K key
+            return true;
+        }
+        
+        // Main log view navigation keys (j/k - lowercase letters and arrow keys)
         if (event == Event::ArrowUp || event == Event::Character('k')) {
             // Check if tailing should be stopped for navigation events
             if (parent_->IsTailing() && parent_->ShouldStopTailing(event)) {
                 parent_->StopTailing();
             }
             
-            // Check focus priority: Detail View -> Filter Panel -> Main Window
-            if (parent_->IsDetailViewFocused()) {
-                parent_->DetailViewScrollUp();
-                return true;
-            }
-            // If filter panel has focus, let it handle the event
+            // j/k always go to main log view, even when detail view is focused
+            // Only filter panel can intercept these keys
             if (parent_->GetFilterPanel() && parent_->GetFilterPanel()->IsFocused()) {
                 parent_->GetFilterPanel()->NavigateUp();
                 return true;
@@ -543,12 +557,8 @@ public:
                 parent_->StopTailing();
             }
             
-            // Check focus priority: Detail View -> Filter Panel -> Main Window
-            if (parent_->IsDetailViewFocused()) {
-                parent_->DetailViewScrollDown();
-                return true;
-            }
-            // If filter panel has focus, let it handle the event
+            // j/k always go to main log view, even when detail view is focused
+            // Only filter panel can intercept these keys
             if (parent_->GetFilterPanel() && parent_->GetFilterPanel()->IsFocused()) {
                 parent_->GetFilterPanel()->NavigateDown();
                 return true;
@@ -1569,7 +1579,7 @@ ftxui::Element MainWindow::RenderDetailView() const {
     std::string title_text = "Detail View - Line " + std::to_string(selected_entry.Get_line_number()) + " (" + entry_type + ")";
     
     if (detail_view_focused_) {
-        title_text += " [FOCUSED - j/k to scroll, ESC to unfocus]";
+        title_text += " [FOCUSED - J/K to scroll, ESC to unfocus]";
     } else {
         title_text += " [TAB to focus]";
     }
@@ -1582,8 +1592,8 @@ ftxui::Element MainWindow::RenderDetailView() const {
                          visual_theme_manager_->GetFocusColor() : 
                          visual_theme_manager_->GetHighlightColor());
     
-    // Use the full message (which now includes multi-line content) instead of raw_line
-    std::string full_message = selected_entry.Get_message();
+    // Use the full raw line instead of just the parsed message
+    std::string full_message = selected_entry.Get_raw_line();
     
     // Split message into lines for individual line navigation
     std::vector<std::string> message_lines;

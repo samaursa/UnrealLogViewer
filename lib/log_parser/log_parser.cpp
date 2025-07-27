@@ -153,6 +153,21 @@ namespace ue_log {
     }
     
     LogEntry LogParser::ParseSingleEntry(const std::string& line, size_t line_number) {
+        // Check if this is a continuation line (no timestamp)
+        if (!HasTimestamp(line)) {
+            // This is a continuation line - create a minimal entry with no logger/timestamp
+            return LogEntry(
+                LogEntryType::Unstructured,
+                std::nullopt,  // No timestamp
+                std::nullopt,  // No frame number
+                "",            // Empty logger name for continuation lines
+                std::nullopt,  // No log level
+                line,          // Use the entire line as message
+                line,          // Raw line
+                line_number
+            );
+        }
+        
         LogEntryType type = DetectEntryType(line);
         
         // Use specific parsing method based on entry type

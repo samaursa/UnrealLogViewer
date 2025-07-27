@@ -270,11 +270,7 @@ Element LogEntryRenderer::ApplyLogLevelStyling(Element element, const std::strin
         styled_element = styled_element | bgcolor(bg_color);
     }
     
-    // Add additional visual emphasis for errors
-    if (level == "Error") {
-        // Make errors even more prominent with inverted colors for maximum visibility
-        styled_element = styled_element | inverted;
-    }
+    // Errors already have color and bold styling - no need for additional emphasis
     
     return styled_element;
 }
