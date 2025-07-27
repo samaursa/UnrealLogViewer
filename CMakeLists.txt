@@ -42,6 +42,8 @@ add_library(unreal_log_lib
   macros.h
   lib/common/result.h
   lib/common/result.cpp
+  lib/common/unreal_project_utils.h
+  lib/common/unreal_project_utils.cpp
   lib/core/log_processor.h
   lib/core/log_processor.cpp
   lib/core/filter_manager.h
@@ -73,6 +75,8 @@ add_library(unreal_log_lib
   lib/ui/log_entry_renderer.cpp
   lib/ui/relative_line_number_system.h
   lib/ui/relative_line_number_system.cpp
+  lib/ui/file_browser.h
+  lib/ui/file_browser.cpp
 )
 
 # Set library properties
@@ -123,6 +127,8 @@ add_executable(unreal_log_tests
   tests/test_visual_polish_integration.cpp
   tests/test_multiline_parsing.cpp
   tests/test_detail_view_focus.cpp
+  tests/test_unreal_project_utils.cpp
+  tests/test_file_browser.cpp
 )
 
 # Link test application dependencies
@@ -354,6 +360,19 @@ add_executable(test_real_tailing
 
 # Link real tailing test dependencies
 target_link_libraries(test_real_tailing
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a file browser demo executable
+add_executable(test_file_browser_demo
+  test_file_browser_demo.cpp
+)
+
+# Link file browser demo dependencies
+target_link_libraries(test_file_browser_demo
   PRIVATE unreal_log_lib
   PRIVATE ftxui::screen
   PRIVATE ftxui::dom
