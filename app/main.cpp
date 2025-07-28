@@ -40,23 +40,37 @@ int main(int argc, char* argv[]) {
                if (path.empty()) {
                    return "";  // Allow empty path for auto-detection
                }
-               if (!std::filesystem::exists(path)) {
+               
+               std::error_code ec;
+               if (!std::filesystem::exists(path, ec)) {
+                   if (ec) {
+                       return "Cannot access path: " + path + " (" + ec.message() + ")";
+                   }
                    return "Path does not exist: " + path;
                }
                
                // Check if it's a file or directory
-               std::error_code ec;
                if (std::filesystem::is_regular_file(path, ec)) {
+                   if (ec) {
+                       return "Cannot determine if path is a file: " + path + " (" + ec.message() + ")";
+                   }
                    // For files, check if it's a .log file
                    if (path.size() < 4 || path.substr(path.size() - 4) != ".log") {
                        return "File must have .log extension: " + path;
                    }
                } else if (std::filesystem::is_directory(path, ec)) {
-                   // For directories, check if it's accessible
-                   if (!ue_log::unreal_utils::ValidateDirectoryPath(path)) {
-                       return "Directory is not accessible: " + path;
+                   if (ec) {
+                       return "Cannot determine if path is a directory: " + path + " (" + ec.message() + ")";
+                   }
+                   // For directories, use the enhanced validation
+                   auto [is_valid, error_msg] = ue_log::unreal_utils::ValidateDirectoryPathWithError(path);
+                   if (!is_valid) {
+                       return error_msg;
                    }
                } else {
+                   if (ec) {
+                       return "Cannot determine path type: " + path + " (" + ec.message() + ")";
+                   }
                    return "Path must be a file or directory: " + path;
                }
                
@@ -223,13 +237,15 @@ int main(int argc, char* argv[]) {
         if (input_path.empty()) {
             // No path provided - try to auto-detect Saved/Logs directory
             std::cout << "No path specified. Attempting to find Saved/Logs directory..." << std::endl;
-            resolved_path = ue_log::unreal_utils::FindSavedLogsDirectory();
+            auto [found_path, status_msg] = ue_log::unreal_utils::FindSavedLogsDirectoryWithError();
             
-            if (!resolved_path.empty()) {
-                std::cout << "Found Saved/Logs directory: " << resolved_path << std::endl;
+            if (!found_path.empty()) {
+                resolved_path = found_path;
+                std::cout << "Success: " << status_msg << " -> " << resolved_path << std::endl;
                 is_directory = true;
             } else {
-                std::cout << "No Saved/Logs directory found. You can load a file from the UI." << std::endl;
+                std::cout << "Info: " << status_msg << std::endl;
+                std::cout << "You can load a file from the UI or specify a path as an argument." << std::endl;
             }
         } else {
             // Path was provided - determine if it's a file or directory
@@ -246,13 +262,17 @@ int main(int argc, char* argv[]) {
         // Handle the resolved path
         if (!resolved_path.empty()) {
             if (is_directory) {
-                // Check if directory contains log files
-                if (ue_log::unreal_utils::ContainsLogFiles(resolved_path)) {
-                    std::cout << "Directory contains log files. Starting in file browser mode..." << std::endl;
-                    // TODO: This will be implemented in task 6 - for now, show message
-                    std::cout << "File browser mode not yet implemented. You can load a file from the UI." << std::endl;
+                // Check if directory contains log files with detailed feedback
+                auto [log_files, status_msg] = ue_log::unreal_utils::GetLogFilesWithError(resolved_path);
+                
+                if (!log_files.empty()) {
+                    std::cout << "Success: " << status_msg << " in " << resolved_path << std::endl;
+                    std::cout << "Starting in file browser mode..." << std::endl;
+                    
+                    // Enter file browser mode
+                    main_window->EnterFileBrowserMode(resolved_path);
                 } else {
-                    std::cerr << "Warning: Directory contains no .log files: " << resolved_path << std::endl;
+                    std::cerr << "Warning: " << status_msg << " in " << resolved_path << std::endl;
                     std::cerr << "You can load a file from the UI or specify a different directory." << std::endl;
                 }
             } else {

@@ -5,6 +5,7 @@
 #include "visual_theme_manager.h"
 #include "log_entry_renderer.h"
 #include "relative_line_number_system.h"
+#include "file_browser.h"
 #include "../log_parser/log_parser.h"
 #include "../filter_engine/filter_engine.h"
 #include "../filter_engine/filter_expression.h"
@@ -25,7 +26,15 @@ namespace ue_log {
  * Integrates all other UI components and manages the application state.
  */
 class MainWindow : public Component {
+    friend class MainWindowComponent;
+    
 public:
+    // Application mode management
+    enum class ApplicationMode {
+        FILE_BROWSER,
+        LOG_VIEWER
+    };
+    
     /**
      * Default constructor.
      */
@@ -341,6 +350,15 @@ public:
     void ClearVimCommandBuffer();
     bool IsVimCommandMode() const { return vim_command_mode_; }
     void BackspaceVimCommand();
+    
+    // Application mode management
+    void SetMode(ApplicationMode mode);
+    ApplicationMode GetMode() const { return current_mode_; }
+    void InitializeFileBrowser(const std::string& directory_path);
+    void TransitionToLogViewer(const std::string& file_path);
+    void OnFileSelected(const std::string& file_path);
+    void EnterFileBrowserMode(const std::string& directory_path);
+    void EnterLogViewerMode(const std::string& file_path);
 
 private:
     // FTXUI component
@@ -356,6 +374,11 @@ private:
     std::unique_ptr<VisualThemeManager> visual_theme_manager_;
     std::unique_ptr<LogEntryRenderer> log_entry_renderer_;
     std::unique_ptr<RelativeLineNumberSystem> relative_line_system_;
+    
+    // Application mode management
+    ApplicationMode current_mode_ = ApplicationMode::LOG_VIEWER;
+    std::unique_ptr<FileBrowser> file_browser_;
+    std::string initial_directory_;
     
     ConfigManager* config_manager_ = nullptr;
     bool owns_config_manager_ = false;
@@ -452,6 +475,10 @@ private:
     ftxui::Element RenderQuickFilterDialog() const;
     ftxui::Element RenderJumpDialog() const;
     ftxui::Color GetColorForLogLevel(const std::string& level) const;
+    
+    // Mode-specific rendering
+    ftxui::Element RenderFileBrowserMode() const;
+    ftxui::Element RenderLogViewerMode() const;
     
     // Navigation helpers
     void SelectEntry(int index);

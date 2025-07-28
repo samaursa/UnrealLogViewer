@@ -27,6 +27,23 @@ public:
         // Debug: Log all events
         // std::cout << "Event received" << std::endl;
         
+        // Handle file browser mode events first
+        if (parent_->GetMode() == MainWindow::ApplicationMode::FILE_BROWSER) {
+            // Let file browser handle its events
+            if (parent_->file_browser_ && parent_->file_browser_->OnEvent(event)) {
+                return true;
+            }
+            
+            // Handle quit key in file browser mode
+            if (event == Event::Character('q')) {
+                parent_->Exit();
+                return true;
+            }
+            
+            // All other events are ignored in file browser mode
+            return false;
+        }
+        
         // Handle ESC key - priority order matters!
         if (event == Event::Escape) {
             // 1. First check vim command mode
@@ -705,6 +722,35 @@ void MainWindow::Initialize() {
 }
 
 ftxui::Element MainWindow::Render() const {
+    // Handle different application modes
+    if (current_mode_ == ApplicationMode::FILE_BROWSER) {
+        return RenderFileBrowserMode();
+    } else {
+        return RenderLogViewerMode();
+    }
+}
+
+ftxui::Element MainWindow::RenderFileBrowserMode() const {
+    using namespace ftxui;
+    
+    std::vector<Element> main_elements;
+    
+    // Add file browser (takes most of the space)
+    if (file_browser_) {
+        main_elements.push_back(file_browser_->Render() | flex);
+    } else {
+        main_elements.push_back(text("File browser not initialized") | center | flex);
+    }
+    
+    // Add status bar at the bottom
+    main_elements.push_back(RenderStatusBar());
+    
+    return vbox(main_elements);
+}
+
+ftxui::Element MainWindow::RenderLogViewerMode() const {
+    using namespace ftxui;
+    
     // Main layout: log table + detail view + status bar
     std::vector<Element> main_elements;
     
@@ -823,6 +869,96 @@ bool MainWindow::ReloadLogFile() {
     }
     
     return LoadLogFile(current_file_path_);
+}
+
+void MainWindow::SetMode(ApplicationMode mode) {
+    current_mode_ = mode;
+    
+    // Update UI state based on mode
+    if (mode == ApplicationMode::FILE_BROWSER) {
+        // Hide log viewer specific UI elements
+        show_search_ = false;
+        show_filter_panel_ = false;
+        show_detail_view_ = false;
+        show_jump_dialog_ = false;
+        
+        // Focus the file browser if it exists
+        if (file_browser_) {
+            file_browser_->SetFocus(true);
+        }
+    } else if (mode == ApplicationMode::LOG_VIEWER) {
+        // Restore log viewer UI elements to default state
+        show_detail_view_ = true;
+        
+        // Unfocus the file browser if it exists
+        if (file_browser_) {
+            file_browser_->SetFocus(false);
+        }
+    }
+    
+    // Trigger screen refresh
+    if (refresh_callback_) {
+        refresh_callback_();
+    }
+}
+
+void MainWindow::InitializeFileBrowser(const std::string& directory_path) {
+    initial_directory_ = directory_path;
+    
+    // Create and initialize the file browser
+    file_browser_ = std::make_unique<FileBrowser>(directory_path);
+    file_browser_->Initialize();
+    
+    // Set up callbacks
+    file_browser_->SetFileSelectionCallback([this](const std::string& file_path) {
+        OnFileSelected(file_path);
+    });
+    
+    file_browser_->SetErrorCallback([this](const std::string& error) {
+        SetLastError(error);
+        if (refresh_callback_) {
+            refresh_callback_();
+        }
+    });
+    
+    file_browser_->SetStatusCallback([this](const std::string& status) {
+        SetLastError(status);  // Use SetLastError for positive status messages too
+        if (refresh_callback_) {
+            refresh_callback_();
+        }
+    });
+    
+    // Switch to file browser mode
+    SetMode(ApplicationMode::FILE_BROWSER);
+}
+
+void MainWindow::TransitionToLogViewer(const std::string& file_path) {
+    // Load the log file
+    if (LoadLogFile(file_path)) {
+        // Switch to log viewer mode
+        SetMode(ApplicationMode::LOG_VIEWER);
+        SetLastError("Loaded file: " + file_path);
+    } else {
+        // Stay in file browser mode and show error
+        SetLastError("Failed to load file: " + file_path + " - " + GetLastError());
+    }
+    
+    // Trigger screen refresh
+    if (refresh_callback_) {
+        refresh_callback_();
+    }
+}
+
+void MainWindow::OnFileSelected(const std::string& file_path) {
+    TransitionToLogViewer(file_path);
+}
+
+void MainWindow::EnterFileBrowserMode(const std::string& directory_path) {
+    InitializeFileBrowser(directory_path);
+}
+
+void MainWindow::EnterLogViewerMode(const std::string& file_path) {
+    TransitionToLogViewer(file_path);
 }
 
 bool MainWindow::StartTailing() {

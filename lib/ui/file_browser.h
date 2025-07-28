@@ -85,6 +85,15 @@ public:
         error_callback_ = std::move(callback);
     }
     
+    // Status message callback for positive feedback
+    using StatusCallback = std::function<void(const std::string&)>;
+    void SetStatusCallback(StatusCallback callback) {
+        status_callback_ = std::move(callback);
+    }
+    
+    // Get last scan error (if any)
+    std::string GetLastScanError() const { return last_scan_error_; }
+    
     // Load selected file with error handling
     void LoadSelectedFile();
 
@@ -115,12 +124,19 @@ private:
     // Callback for error handling
     ErrorCallback error_callback_;
     
+    // Callback for status messages
+    StatusCallback status_callback_;
+    
+    // Last scan error message
+    std::string last_scan_error_;
+    
     void ScanDirectory();
     void SortFilesByModificationTime();
     ftxui::Element RenderFileList() const;
     ftxui::Element RenderFileEntry(const FileInfo& file, bool selected) const;
     ftxui::Element RenderHeader() const;
     ftxui::Element RenderInstructions() const;
+    ftxui::Element RenderStatusLine() const;
     
     // Helper methods for navigation
     int GetVisibleFileCount() const;
