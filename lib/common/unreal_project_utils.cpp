@@ -295,5 +295,54 @@ std::pair<std::string, std::string> FindSavedLogsDirectoryWithError(const std::s
     }
 }
 
+std::pair<std::string, std::string> ProcessFolderArgument(const std::string& folder_path) {
+    try {
+        // First validate that the provided folder path exists and is accessible
+        auto [is_valid, validation_msg] = ValidateDirectoryPathWithError(folder_path);
+        if (!is_valid) {
+            return {"", "Invalid folder path: " + validation_msg};
+        }
+        
+        std::filesystem::path provided_path(folder_path);
+        
+        // Check if the provided folder contains a Saved/Logs subdirectory
+        std::filesystem::path saved_logs_path = provided_path / "Saved" / "Logs";
+        std::error_code ec;
+        
+        if (std::filesystem::exists(saved_logs_path, ec) && !ec && 
+            std::filesystem::is_directory(saved_logs_path, ec) && !ec) {
+            
+            // Found Saved/Logs subdirectory - check if it contains log files
+            auto [log_files, log_status] = GetLogFilesWithError(saved_logs_path.string());
+            
+            if (!log_files.empty()) {
+                return {saved_logs_path.string(), 
+                       "Auto-detected Unreal project: using Saved/Logs directory (" + log_status + ")"};
+            } else {
+                // Saved/Logs exists but is empty - still use it but with appropriate message
+                return {saved_logs_path.string(), 
+                       "Auto-detected Unreal project: using Saved/Logs directory (but " + log_status + ")"};
+            }
+        }
+        
+        // No Saved/Logs found - check if the provided folder itself contains log files
+        auto [log_files, log_status] = GetLogFilesWithError(folder_path);
+        
+        if (!log_files.empty()) {
+            return {folder_path, 
+                   "Using provided directory (" + log_status + ")"};
+        } else {
+            // No log files found, but still return the path for potential future use
+            return {folder_path, 
+                   "Using provided directory (but " + log_status + ")"};
+        }
+        
+    } catch (const std::filesystem::filesystem_error& e) {
+        return {"", "Filesystem error processing folder: " + std::string(e.what())};
+    } catch (const std::exception& e) {
+        return {"", "Unexpected error processing folder: " + std::string(e.what())};
+    }
+}
+
 } // namespace unreal_utils
 } // namespace ue_log

@@ -253,6 +253,20 @@ int main(int argc, char* argv[]) {
             if (std::filesystem::is_directory(input_path, ec)) {
                 is_directory = true;
                 std::cout << "Directory specified: " << input_path << std::endl;
+                
+                // Use enhanced folder processing for automatic Saved/Logs detection
+                auto [processed_path, process_msg] = ue_log::unreal_utils::ProcessFolderArgument(input_path);
+                
+                if (!processed_path.empty()) {
+                    resolved_path = processed_path;
+                    std::cout << "Info: " << process_msg << std::endl;
+                    if (processed_path != input_path) {
+                        std::cout << "Resolved path: " << resolved_path << std::endl;
+                    }
+                } else {
+                    std::cout << "Warning: " << process_msg << std::endl;
+                    std::cout << "You can load a file from the UI or specify a different directory." << std::endl;
+                }
             } else if (std::filesystem::is_regular_file(input_path, ec)) {
                 is_directory = false;
                 std::cout << "File specified: " << input_path << std::endl;

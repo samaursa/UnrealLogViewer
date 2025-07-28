@@ -255,6 +255,116 @@ TEST_CASE("GetFileMetadata with directory instead of file", "[unreal_utils]") {
     test.TearDown();
 }
 
+TEST_CASE("ProcessFolderArgument with Saved/Logs subdirectory", "[unreal_utils]") {
+    UnrealProjectUtilsTest test;
+    test.SetUp();
+    
+    // Create log files in Saved/Logs
+    test.CreateTestLogFile(test.saved_logs_dir, "MyProject.log");
+    test.CreateTestLogFile(test.saved_logs_dir, "MyProject-2024.01.01.log");
+    
+    auto [resolved_path, status_msg] = ue_log::unreal_utils::ProcessFolderArgument(test.test_dir.string());
+    
+    REQUIRE(resolved_path == test.saved_logs_dir.string());
+    REQUIRE(status_msg.find("Auto-detected Unreal project") != std::string::npos);
+    REQUIRE(status_msg.find("Found 2 log file") != std::string::npos);
+    
+    test.TearDown();
+}
+
+TEST_CASE("ProcessFolderArgument with empty Saved/Logs subdirectory", "[unreal_utils]") {
+    UnrealProjectUtilsTest test;
+    test.SetUp();
+    
+    // Saved/Logs exists but is empty (created in SetUp but no log files added)
+    
+    auto [resolved_path, status_msg] = ue_log::unreal_utils::ProcessFolderArgument(test.test_dir.string());
+    
+    REQUIRE(resolved_path == test.saved_logs_dir.string());
+    REQUIRE(status_msg.find("Auto-detected Unreal project") != std::string::npos);
+    REQUIRE(status_msg.find("Directory is empty") != std::string::npos);
+    
+    test.TearDown();
+}
+
+TEST_CASE("ProcessFolderArgument without Saved/Logs subdirectory", "[unreal_utils]") {
+    UnrealProjectUtilsTest test;
+    test.SetUp();
+    
+    // Remove Saved/Logs directory and create log files in the main directory
+    std::filesystem::remove_all(test.saved_logs_dir);
+    test.CreateTestLogFile(test.test_dir, "DirectLog.log");
+    
+    auto [resolved_path, status_msg] = ue_log::unreal_utils::ProcessFolderArgument(test.test_dir.string());
+    
+    REQUIRE(resolved_path == test.test_dir.string());
+    REQUIRE(status_msg.find("Using provided directory") != std::string::npos);
+    REQUIRE(status_msg.find("Found 1 log file") != std::string::npos);
+    
+    test.TearDown();
+}
+
+TEST_CASE("ProcessFolderArgument with no log files anywhere", "[unreal_utils]") {
+    UnrealProjectUtilsTest test;
+    test.SetUp();
+    
+    // Remove Saved/Logs and don't create any log files
+    std::filesystem::remove_all(test.saved_logs_dir);
+    
+    auto [resolved_path, status_msg] = ue_log::unreal_utils::ProcessFolderArgument(test.test_dir.string());
+    
+    REQUIRE(resolved_path == test.test_dir.string());
+    REQUIRE(status_msg.find("Using provided directory") != std::string::npos);
+    // The directory contains other subdirectories (logs_dir, empty_dir) but no .log files
+    REQUIRE(status_msg.find("No .log files found") != std::string::npos);
+    
+    test.TearDown();
+}
+
+TEST_CASE("ProcessFolderArgument with invalid folder path", "[unreal_utils]") {
+    auto [resolved_path, status_msg] = ue_log::unreal_utils::ProcessFolderArgument("/non/existent/path");
+    
+    REQUIRE(resolved_path.empty());
+    REQUIRE(status_msg.find("Invalid folder path") != std::string::npos);
+    REQUIRE(status_msg.find("Directory does not exist") != std::string::npos);
+}
+
+TEST_CASE("ProcessFolderArgument with file instead of directory", "[unreal_utils]") {
+    UnrealProjectUtilsTest test;
+    test.SetUp();
+    
+    // Create a file instead of using a directory
+    std::filesystem::path file_path = test.test_dir / "test_file.txt";
+    std::ofstream file(file_path);
+    file << "test content";
+    file.close();
+    
+    auto [resolved_path, status_msg] = ue_log::unreal_utils::ProcessFolderArgument(file_path.string());
+    
+    REQUIRE(resolved_path.empty());
+    REQUIRE(status_msg.find("Invalid folder path") != std::string::npos);
+    REQUIRE(status_msg.find("Path is not a directory") != std::string::npos);
+    
+    test.TearDown();
+}
+
+TEST_CASE("ProcessFolderArgument prioritizes Saved/Logs over direct log files", "[unreal_utils]") {
+    UnrealProjectUtilsTest test;
+    test.SetUp();
+    
+    // Create log files in both the main directory and Saved/Logs
+    test.CreateTestLogFile(test.test_dir, "MainDir.log");
+    test.CreateTestLogFile(test.saved_logs_dir, "SavedLogs.log");
+    
+    auto [resolved_path, status_msg] = ue_log::unreal_utils::ProcessFolderArgument(test.test_dir.string());
+    
+    // Should prefer Saved/Logs over the main directory
+    REQUIRE(resolved_path == test.saved_logs_dir.string());
+    REQUIRE(status_msg.find("Auto-detected Unreal project") != std::string::npos);
+    
+    test.TearDown();
+}
+
 TEST_CASE("Integration test: Complete workflow", "[unreal_utils]") {
     UnrealProjectUtilsTest test;
     test.SetUp();
@@ -284,6 +394,35 @@ TEST_CASE("Integration test: Complete workflow", "[unreal_utils]") {
     auto [size, mod_time] = ue_log::unreal_utils::GetFileMetadata(log_files[0]);
     REQUIRE(size > 0);
     REQUIRE(mod_time != std::filesystem::file_time_type{});
+    
+    test.TearDown();
+}
+
+TEST_CASE("Integration test: ProcessFolderArgument workflow", "[unreal_utils]") {
+    UnrealProjectUtilsTest test;
+    test.SetUp();
+    
+    // Create a realistic Unreal project structure
+    test.CreateTestLogFile(test.saved_logs_dir, "MyProject.log");
+    test.CreateTestLogFileWithDelay(test.saved_logs_dir, "MyProject-2024.01.01-12.00.00.log", 50);
+    test.CreateTestLogFileWithDelay(test.saved_logs_dir, "MyProject-2024.01.01-13.00.00.log", 50);
+    
+    // 1. Process the folder argument (simulating user providing project root)
+    auto [resolved_path, status_msg] = ue_log::unreal_utils::ProcessFolderArgument(test.test_dir.string());
+    REQUIRE(!resolved_path.empty());
+    REQUIRE(resolved_path == test.saved_logs_dir.string());
+    REQUIRE(status_msg.find("Auto-detected Unreal project") != std::string::npos);
+    
+    // 2. Verify the resolved path contains log files
+    bool has_logs = ue_log::unreal_utils::ContainsLogFiles(resolved_path);
+    REQUIRE(has_logs == true);
+    
+    // 3. Get all log files from the resolved path
+    auto log_files = ue_log::unreal_utils::GetLogFiles(resolved_path);
+    REQUIRE(log_files.size() == 3);
+    
+    // 4. Verify the newest file is first
+    REQUIRE(log_files[0].find("13.00.00") != std::string::npos);
     
     test.TearDown();
 }

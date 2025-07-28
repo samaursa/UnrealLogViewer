@@ -75,5 +75,15 @@ std::pair<std::string, std::string> FindSavedLogsDirectoryWithError();
  */
 std::pair<std::string, std::string> FindSavedLogsDirectoryWithError(const std::string& base_directory);
 
+/**
+ * Process a folder argument with automatic Saved/Logs detection.
+ * This function checks if the provided folder contains a Saved/Logs subdirectory
+ * and returns the appropriate path to use for log browsing.
+ * @param folder_path The folder path provided by the user
+ * @return Pair of (resolved_path, status_message). resolved_path is the path to use,
+ *         status_message provides feedback about what was found/resolved.
+ */
+std::pair<std::string, std::string> ProcessFolderArgument(const std::string& folder_path);
+
 } // namespace unreal_utils
 } // namespace ue_log
