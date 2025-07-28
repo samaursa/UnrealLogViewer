@@ -692,6 +692,80 @@ TEST_CASE("FilterEngine utility methods work correctly", "[filter_engine]") {
     }
 }
 
+TEST_CASE("FilterEngine three-state filtering works correctly", "[filter_engine]") {
+    FilterEngine engine;
+    
+    // Create test entries
+    LogEntry error_entry("LogTemp", "This is an error message", "raw line");
+    LogEntry warning_entry("LogTemp", "This is a warning message", "raw line");
+    LogEntry info_entry("LogTemp", "This is an info message", "raw line");
+    
+    // Create filters
+    auto error_filter = std::make_unique<Filter>("ErrorFilter", FilterType::TextContains, "error");
+    auto warning_filter = std::make_unique<Filter>("WarningFilter", FilterType::TextContains, "warning");
+    
+    Filter* error_filter_ptr = error_filter.get();
+    Filter* warning_filter_ptr = warning_filter.get();
+    
+    engine.AddFilter(std::move(error_filter));
+    engine.AddFilter(std::move(warning_filter));
+    
+    SECTION("Include filters work correctly") {
+        // Both filters in INCLUDE state (default)
+        REQUIRE(error_filter_ptr->GetFilterState() == FilterState::INCLUDE);
+        REQUIRE(warning_filter_ptr->GetFilterState() == FilterState::INCLUDE);
+        
+        // Should pass entries that match either filter (OR logic)
+        REQUIRE(engine.PassesFilters(error_entry));
+        REQUIRE(engine.PassesFilters(warning_entry));
+        REQUIRE_FALSE(engine.PassesFilters(info_entry));
+    }
+    
+    SECTION("Exclude filters work correctly") {
+        // Set both filters to EXCLUDE state
+        error_filter_ptr->SetFilterState(FilterState::EXCLUDE);
+        warning_filter_ptr->SetFilterState(FilterState::EXCLUDE);
+        
+        // Should pass entries that don't match any exclude filter
+        REQUIRE_FALSE(engine.PassesFilters(error_entry));
+        REQUIRE_FALSE(engine.PassesFilters(warning_entry));
+        REQUIRE(engine.PassesFilters(info_entry));
+    }
+    
+    SECTION("Mixed include and exclude filters work correctly") {
+        // Error filter: INCLUDE, Warning filter: EXCLUDE
+        error_filter_ptr->SetFilterState(FilterState::INCLUDE);
+        warning_filter_ptr->SetFilterState(FilterState::EXCLUDE);
+        
+        // Should pass entries that match include filters AND don't match exclude filters
+        REQUIRE(engine.PassesFilters(error_entry));    // Matches include, doesn't match exclude
+        REQUIRE_FALSE(engine.PassesFilters(warning_entry)); // Doesn't match include, matches exclude
+        REQUIRE_FALSE(engine.PassesFilters(info_entry));    // Doesn't match include
+    }
+    
+    SECTION("Disabled filters are ignored") {
+        // Set one filter to disabled
+        error_filter_ptr->SetFilterState(FilterState::DISABLED);
+        warning_filter_ptr->SetFilterState(FilterState::INCLUDE);
+        
+        // Only warning filter should be active
+        REQUIRE(engine.GetTotalActiveFilters() == 1);
+        REQUIRE_FALSE(engine.PassesFilters(error_entry));
+        REQUIRE(engine.PassesFilters(warning_entry));
+        REQUIRE_FALSE(engine.PassesFilters(info_entry));
+    }
+    
+    SECTION("All filters disabled means all entries pass") {
+        error_filter_ptr->SetFilterState(FilterState::DISABLED);
+        warning_filter_ptr->SetFilterState(FilterState::DISABLED);
+        
+        REQUIRE(engine.GetTotalActiveFilters() == 0);
+        REQUIRE(engine.PassesFilters(error_entry));
+        REQUIRE(engine.PassesFilters(warning_entry));
+        REQUIRE(engine.PassesFilters(info_entry));
+    }
+}
+
 TEST_CASE("FilterEngine GetMatchingFilters works correctly", "[filter_engine]") {
     FilterEngine engine;
     
@@ -723,6 +797,85 @@ TEST_CASE("FilterEngine GetMatchingFilters works correctly", "[filter_engine]") 
         
         std::vector<const Filter*> matching = engine.GetMatchingFilters(entry);
         REQUIRE(matching.empty());
+    }
+}
+
+TEST_CASE("Filter three-state functionality works correctly", "[filter]") {
+    Filter filter("ThreeStateFilter", FilterType::TextContains, "error");
+    
+    LogEntry matching_entry("LogTemp", "This is an error message", "raw line");
+    LogEntry non_matching_entry("LogTemp", "This is an info message", "raw line");
+    
+    SECTION("Default INCLUDE state") {
+        REQUIRE(filter.GetFilterState() == FilterState::INCLUDE);
+        REQUIRE(filter.ShouldInclude(matching_entry));
+        REQUIRE_FALSE(filter.ShouldInclude(non_matching_entry));
+        REQUIRE_FALSE(filter.ShouldExclude(matching_entry));
+        REQUIRE(filter.Matches(matching_entry));
+        REQUIRE(filter.IsActive());
+    }
+    
+    SECTION("EXCLUDE state after cycling") {
+        filter.CycleFilterState();
+        REQUIRE(filter.GetFilterState() == FilterState::EXCLUDE);
+        REQUIRE_FALSE(filter.ShouldInclude(matching_entry));
+        REQUIRE(filter.ShouldExclude(matching_entry));
+        REQUIRE_FALSE(filter.ShouldExclude(non_matching_entry));
+        REQUIRE(filter.Matches(matching_entry)); // Still matches for exclusion logic
+        REQUIRE(filter.IsActive());
+    }
+    
+    SECTION("DISABLED state after cycling twice") {
+        filter.CycleFilterState();
+        filter.CycleFilterState();
+        REQUIRE(filter.GetFilterState() == FilterState::DISABLED);
+        REQUIRE_FALSE(filter.ShouldInclude(matching_entry));
+        REQUIRE_FALSE(filter.ShouldExclude(matching_entry));
+        REQUIRE_FALSE(filter.Matches(matching_entry));
+        REQUIRE_FALSE(filter.IsActive());
+    }
+    
+    SECTION("Cycle back to INCLUDE") {
+        filter.CycleFilterState();
+        filter.CycleFilterState();
+        filter.CycleFilterState();
+        REQUIRE(filter.GetFilterState() == FilterState::INCLUDE);
+        REQUIRE(filter.ShouldInclude(matching_entry));
+        REQUIRE(filter.Matches(matching_entry));
+        REQUIRE(filter.IsActive());
+    }
+    
+    SECTION("Backward compatibility with is_active") {
+        filter.Request_is_active(false);
+        REQUIRE(filter.GetFilterState() == FilterState::DISABLED);
+        REQUIRE_FALSE(filter.IsActive());
+        REQUIRE_FALSE(filter.Matches(matching_entry));
+        
+        filter.Request_is_active(true);
+        REQUIRE(filter.GetFilterState() == FilterState::INCLUDE);
+        REQUIRE(filter.IsActive());
+        REQUIRE(filter.Matches(matching_entry));
+    }
+    
+    SECTION("Filter validation works with all states") {
+        // Valid filter should be valid in all states
+        REQUIRE(filter.IsValid());
+        
+        filter.SetFilterState(FilterState::EXCLUDE);
+        REQUIRE(filter.IsValid());
+        
+        filter.SetFilterState(FilterState::DISABLED);
+        REQUIRE(filter.IsValid());
+        
+        // Invalid filter should be invalid in all states
+        Filter invalid_filter("", FilterType::TextContains, "");
+        REQUIRE_FALSE(invalid_filter.IsValid());
+        
+        invalid_filter.SetFilterState(FilterState::EXCLUDE);
+        REQUIRE_FALSE(invalid_filter.IsValid());
+        
+        invalid_filter.SetFilterState(FilterState::DISABLED);
+        REQUIRE_FALSE(invalid_filter.IsValid());
     }
 }
 

@@ -75,8 +75,44 @@ ftxui::Element FilterPanel::Render() const {
     Element content = RenderFilterTree();
     Element controls = RenderFilterControls();
     
+    // Add status line showing current filter state and next action
+    Element status_line;
+    const Filter* selected_filter = GetSelectedFilter();
+    if (selected_filter) {
+        std::string state_desc = GetFilterStateDescription(selected_filter);
+        std::string action_desc = GetNextActionDescription(selected_filter);
+        
+        status_line = vbox({
+            text(state_desc) | color(Color::Cyan) | dim,
+            text(action_desc) | color(Color::Yellow) | dim
+        });
+    } else if (current_filter_expression_ && !current_filter_expression_->IsEmpty()) {
+        // Show status for hierarchical filters (simple boolean for now)
+        const auto& conditions = current_filter_expression_->GetConditions();
+        if (selected_filter_index_ >= 0 && selected_filter_index_ < static_cast<int>(conditions.size())) {
+            const auto* condition = conditions[selected_filter_index_].get();
+            std::string state_desc = condition->Get_is_active_() ? 
+                "ACTIVE: This condition is filtering log entries" : 
+                "INACTIVE: This condition is disabled";
+            std::string action_desc = condition->Get_is_active_() ? 
+                "Press Space to disable this condition" : 
+                "Press Space to enable this condition";
+            
+            status_line = vbox({
+                text(state_desc) | color(Color::Cyan) | dim,
+                text(action_desc) | color(Color::Yellow) | dim
+            });
+        } else {
+            status_line = text("Navigate with ↑↓, toggle with Space") | dim;
+        }
+    } else {
+        status_line = text("No filters available. Create filters from log entries.") | dim;
+    }
+    
     Element window_element = window(text(GetTitle()), vbox({
         content | flex,
+        separator(),
+        status_line,
         separator(),
         controls
     }));
@@ -138,11 +174,11 @@ const Filter* FilterPanel::GetSelectedFilter() const {
 }
 
 void FilterPanel::ToggleSelectedFilter() {
-    // Handle hierarchical filters (contextual filters)
+    // Handle hierarchical filters (contextual filters) - keep simple toggle for now
     if (current_filter_expression_ && !current_filter_expression_->IsEmpty()) {
         const auto& conditions = current_filter_expression_->GetConditions();
         if (selected_filter_index_ >= 0 && selected_filter_index_ < static_cast<int>(conditions.size())) {
-            // Toggle the selected condition
+            // Toggle the selected condition (simple boolean for now)
             auto* condition = conditions[selected_filter_index_].get();
             condition->Request_is_active_(!condition->Get_is_active_());
             
@@ -154,18 +190,18 @@ void FilterPanel::ToggleSelectedFilter() {
         return;
     }
     
-    // Handle traditional filters
+    // Handle traditional filters with three-state cycling
     const Filter* filter = GetSelectedFilter();
     if (!filter || !filter_engine_) {
         return;
     }
     
-    // Find the filter in the engine and toggle it
+    // Find the filter in the engine and cycle its state
     const auto& filters = filter_engine_->Get_primary_filters();
     for (size_t i = 0; i < filters.size(); ++i) {
         if (filters[i].get() == filter) {
-            // Toggle the filter's active state
-            const_cast<Filter*>(filter)->Request_is_active(!filter->Get_is_active());
+            // Cycle through the three filter states: INCLUDE → EXCLUDE → DISABLED → INCLUDE
+            const_cast<Filter*>(filter)->CycleFilterState();
             RefreshFilters();
             if (filters_changed_callback_) {
                 filters_changed_callback_();
@@ -317,7 +353,7 @@ ftxui::Element FilterPanel::RenderFilterTree() const {
         // Show each condition on a separate line with checkboxes and selection
         const auto& conditions = current_filter_expression_->GetConditions();
         for (size_t i = 0; i < conditions.size(); ++i) {
-            // Create checkbox indicator
+            // Create checkbox indicator (simple boolean for now)
             std::string checkbox = conditions[i]->Get_is_active_() ? "[✓]" : "[ ]";
             
             // Create condition text
@@ -387,38 +423,86 @@ ftxui::Element FilterPanel::RenderFilterItem(const FilterDisplayItem& item, bool
         return text("Invalid filter");
     }
     
-    // Create the filter status indicator
-    std::string status = filter->Get_is_active() ? "[✓]" : "[ ]";
+    // Create the filter status indicator based on FilterState
+    std::string status;
+    Element status_element;
+    
+    switch (filter->GetFilterState()) {
+        case FilterState::INCLUDE:
+            status = "[✓]";
+            status_element = text(status) | color(Color::Green);
+            break;
+        case FilterState::EXCLUDE:
+            status = "[−]";
+            status_element = text(status) | color(Color::Red);
+            break;
+        case FilterState::DISABLED:
+            status = "[ ]";
+            status_element = text(status) | color(Color::GrayDark);
+            break;
+    }
     
     // Create the filter type indicator
     std::string type_str = GetFilterTypeString(filter->Get_type());
+    Element type_element = text(type_str);
+    
+    // Create name and criteria elements
+    Element name_element = text(filter->Get_name());
+    Element criteria_element = text(filter->Get_criteria());
+    
+    // Apply state-based styling to type, name, and criteria
+    switch (filter->GetFilterState()) {
+        case FilterState::INCLUDE:
+            // Normal appearance for include filters
+            break;
+        case FilterState::EXCLUDE:
+            // Slightly dimmed for exclude filters to distinguish from include
+            type_element = type_element | color(Color::RedLight);
+            name_element = name_element | color(Color::RedLight);
+            criteria_element = criteria_element | color(Color::RedLight);
+            break;
+        case FilterState::DISABLED:
+            // Greyed out for disabled filters
+            type_element = type_element | dim;
+            name_element = name_element | dim;
+            criteria_element = criteria_element | dim;
+            break;
+    }
     
     // Create the main content
     Element content = hbox({
-        text(status) | size(WIDTH, EQUAL, 4),
-        text(type_str) | size(WIDTH, EQUAL, 12),
-        text(filter->Get_name()) | size(WIDTH, EQUAL, 20),
-        text(filter->Get_criteria()) | flex
+        status_element | size(WIDTH, EQUAL, 4),
+        type_element | size(WIDTH, EQUAL, 12),
+        name_element | size(WIDTH, EQUAL, 20),
+        criteria_element | flex
     });
     
-    // Apply styling based on state
+    // Apply selection highlighting
     if (is_selected) {
         content = content | inverted;
-    }
-    
-    if (!filter->Get_is_active()) {
-        content = content | dim;
     }
     
     return content;
 }
 
 ftxui::Element FilterPanel::RenderFilterControls() const {
-    return hbox({
-        text("[↑↓] Navigate") | size(WIDTH, EQUAL, 15),
-        text("[Space] Toggle") | size(WIDTH, EQUAL, 15),
-        text("[Enter] Expand") | flex
-    }) | dim;
+    // Show different controls based on current context
+    if (current_filter_expression_ && !current_filter_expression_->IsEmpty()) {
+        // Controls for hierarchical filters
+        return hbox({
+            text("[↑↓] Navigate") | size(WIDTH, EQUAL, 15),
+            text("[Space] Cycle State") | size(WIDTH, EQUAL, 18),
+            text("[Del] Remove") | flex
+        }) | dim;
+    } else {
+        // Controls for traditional filters
+        return hbox({
+            text("[↑↓] Navigate") | size(WIDTH, EQUAL, 15),
+            text("[Space] Cycle State") | size(WIDTH, EQUAL, 18),
+            text("[Enter] Expand") | size(WIDTH, EQUAL, 15),
+            text("[Del] Delete") | flex
+        }) | dim;
+    }
 }
 
 std::string FilterPanel::GetFilterTypeString(FilterType type) const {
@@ -462,6 +546,40 @@ ftxui::Color FilterPanel::GetFilterColor(const Filter* filter) const {
             return Color::Magenta;
         default:
             return Color::Default;
+    }
+}
+
+std::string FilterPanel::GetFilterStateDescription(const Filter* filter) const {
+    if (!filter) {
+        return "No filter selected";
+    }
+    
+    switch (filter->GetFilterState()) {
+        case FilterState::INCLUDE:
+            return "INCLUDE: Shows only entries that match this filter";
+        case FilterState::EXCLUDE:
+            return "EXCLUDE: Hides entries that match this filter";
+        case FilterState::DISABLED:
+            return "DISABLED: Filter is ignored completely";
+        default:
+            return "Unknown state";
+    }
+}
+
+std::string FilterPanel::GetNextActionDescription(const Filter* filter) const {
+    if (!filter) {
+        return "";
+    }
+    
+    switch (filter->GetFilterState()) {
+        case FilterState::INCLUDE:
+            return "Press Space to switch to EXCLUDE mode";
+        case FilterState::EXCLUDE:
+            return "Press Space to DISABLE this filter";
+        case FilterState::DISABLED:
+            return "Press Space to switch to INCLUDE mode";
+        default:
+            return "";
     }
 }
 

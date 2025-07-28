@@ -466,37 +466,16 @@ public:
         if (event == Event::Tab) {
             if (parent_->GetFilterPanel() && parent_->IsFilterPanelVisible()) {
                 if (parent_->GetFilterPanel()->IsFocused()) {
-                    // Filter panel is focused, focus detail view if visible
+                    // Skip detail view, go back to main window
                     parent_->GetFilterPanel()->SetFocus(false);
-                    if (parent_->IsDetailViewVisible()) {
-                        parent_->FocusDetailView();
-                        parent_->SetLastError("Detail view focused - J/K to scroll, ESC to unfocus");
-                    } else {
-                        parent_->SetLastError("Main window focused - use arrow keys to navigate logs");
-                    }
-                } else if (parent_->IsDetailViewFocused()) {
-                    // Detail view is focused, return to main window
-                    parent_->UnfocusDetailView();
                     parent_->SetLastError("Main window focused - use arrow keys to navigate logs");
                 } else {
-                    // Main window is focused, focus filter panel
+                    // Main window to filter panel only
                     parent_->GetFilterPanel()->SetFocus(true);
-                    // Auto-select first filter if none selected
-                    if (parent_->GetFilterPanel()->GetSelectedFilterIndex() < 0) {
-                        parent_->GetFilterPanel()->SetSelectedFilterIndex(0);
-                    }
                     parent_->SetLastError("Filter panel focused - use arrow keys to navigate filters, Space to toggle");
                 }
-            } else {
-                // No filter panel, cycle between main window and detail view
-                if (parent_->IsDetailViewFocused()) {
-                    parent_->UnfocusDetailView();
-                    parent_->SetLastError("Main window focused - use arrow keys to navigate logs");
-                } else if (parent_->IsDetailViewVisible()) {
-                    parent_->FocusDetailView();
-                    parent_->SetLastError("Detail view focused - J/K to scroll, ESC to unfocus");
-                }
             }
+            // Remove all detail view focus logic
             return true;
         }
         
@@ -1695,7 +1674,12 @@ ftxui::Element MainWindow::RenderDetailView() const {
         Element no_selection = text("No entry selected") | center;
         no_selection = no_selection | color(visual_theme_manager_->GetMutedTextColor());
         
-        std::string title_text = detail_view_focused_ ? "Detail View (Focused - ESC to unfocus)" : "Detail View (TAB to focus)";
+        const auto& selected_entry = filtered_entries_[selected_entry_index_];
+
+        // Create title with focus indicator and navigation info
+        std::string entry_type = selected_entry.IsStructured() ? "Structured" : 
+                                selected_entry.IsSemiStructured() ? "Semi-Structured" : "Unstructured";
+        std::string title_text = "Detail View - Line " + std::to_string(selected_entry.Get_line_number()) + " (" + entry_type + ")";
         Element title = text(title_text);
         if (visual_theme_manager_->GetFontWeight("header")) {
             title = title | bold;
@@ -1714,11 +1698,11 @@ ftxui::Element MainWindow::RenderDetailView() const {
                             selected_entry.IsSemiStructured() ? "Semi-Structured" : "Unstructured";
     std::string title_text = "Detail View - Line " + std::to_string(selected_entry.Get_line_number()) + " (" + entry_type + ")";
     
-    if (detail_view_focused_) {
-        title_text += " [FOCUSED - J/K to scroll, ESC to unfocus]";
-    } else {
-        title_text += " [TAB to focus]";
-    }
+    //if (detail_view_focused_) {
+    //    title_text += " [FOCUSED - J/K to scroll, ESC to unfocus]";
+    //} else {
+    //    title_text += " [TAB to focus]";
+    //}
     
     Element title = text(title_text);
     if (visual_theme_manager_->GetFontWeight("header")) {
@@ -1757,7 +1741,7 @@ ftxui::Element MainWindow::RenderDetailView() const {
     // Create content elements for visible lines
     std::vector<Element> content_elements;
     for (int i = start_line; i < end_line; i++) {
-        Element line_element = text(message_lines[i]);
+        Element line_element = paragraph(message_lines[i]);
         
         // Apply log level styling to all lines
         if (selected_entry.Get_log_level().has_value()) {
@@ -2526,6 +2510,10 @@ void MainWindow::ToggleDetailView() {
 bool MainWindow::HandleVimStyleNavigation(const std::string& input) {
     if (input.empty()) {
         return false;
+    }
+
+    if (filter_panel_ && filter_panel_->IsFocused()) {
+        return false; // Let filter panel handle j/k instead
     }
     
     char ch = input[0];

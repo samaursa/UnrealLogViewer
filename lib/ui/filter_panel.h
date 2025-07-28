@@ -186,6 +186,8 @@ private:
     std::string GetFilterTypeString(FilterType type) const;
     std::string GetTreePrefix(int depth, bool is_last, bool has_children, bool is_expanded) const;
     ftxui::Color GetFilterColor(const Filter* filter) const;
+    std::string GetFilterStateDescription(const Filter* filter) const;
+    std::string GetNextActionDescription(const Filter* filter) const;
 };
 
 } // namespace ue_log

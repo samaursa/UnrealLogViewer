@@ -35,31 +35,47 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4_
 
 - [ ] 2. Implement Three-State Filter System
+
+
+
+
   - Add FilterState enum and update Filter class to support include/exclude/disabled states
   - Update filter engine logic to handle exclude filters properly
   - Modify filter panel UI to display and cycle through three states
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 2.10_
 
-- [ ] 2.1 Add FilterState enum and update Filter class
+- [x] 2.1 Add FilterState enum and update Filter class
+
+
   - Define FilterState enum with INCLUDE, EXCLUDE, DISABLED values
   - Replace is_active boolean with filter_state member in Filter class
   - Implement GetFilterState, SetFilterState, and CycleFilterState methods
   - Add backward compatibility methods for existing is_active API
   - _Requirements: 2.1, 2.2, 2.3, 2.4_
 
-- [ ] 2.2 Update filter matching logic for exclude functionality
+- [x] 2.2 Update filter matching logic for exclude functionality
+
+
   - Modify Filter::Matches method to handle exclude state properly
   - Add ShouldInclude and ShouldExclude helper methods
   - Update filter validation to work with new state system
   - _Requirements: 2.5, 2.6, 2.7_
 
-- [ ] 2.3 Update FilterEngine to apply exclude filters
+- [x] 2.3 Update FilterEngine to apply exclude filters
+
+
+
   - Modify ApplyFilters method to handle both include and exclude filters
   - Update PassesFilters logic to properly combine include/exclude conditions
   - Ensure disabled filters are completely ignored in filtering logic
   - _Requirements: 2.5, 2.6, 2.7, 2.8_
 
-- [ ] 2.4 Update FilterPanel UI for three-state display
+- [x] 2.4 Update FilterPanel UI for three-state display
+
+
+
+
+
   - Modify RenderFilterItem to show appropriate visual indicators for each state
   - Implement green checkmark for INCLUDE, red negative sign for EXCLUDE, greyed out for DISABLED
   - Update ToggleSelectedFilter to cycle through all three states
@@ -67,6 +83,8 @@
   - _Requirements: 2.9, 2.10_
 
 - [ ] 2.5 Update filter serialization for backward compatibility
+
+
   - Modify Filter::ToJson to serialize FilterState enum
   - Update Filter::FromJson to handle both old boolean and new enum formats
   - Ensure existing filter configurations continue to work

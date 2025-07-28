@@ -51,11 +51,46 @@ namespace ue_log {
         return sub_filters.size();
     }
     
-    bool Filter::Matches(const LogEntry& entry) const {
-        if (!is_active) {
+    void Filter::CycleFilterState() {
+        switch (filter_state) {
+            case FilterState::INCLUDE:
+                filter_state = FilterState::EXCLUDE;
+                break;
+            case FilterState::EXCLUDE:
+                filter_state = FilterState::DISABLED;
+                break;
+            case FilterState::DISABLED:
+                filter_state = FilterState::INCLUDE;
+                break;
+        }
+        is_active = (filter_state != FilterState::DISABLED); // Keep in sync
+    }
+    
+    bool Filter::ShouldInclude(const LogEntry& entry) const {
+        if (filter_state != FilterState::INCLUDE) {
             return false;
         }
-        
+        return MatchesInternal(entry);
+    }
+    
+    bool Filter::ShouldExclude(const LogEntry& entry) const {
+        if (filter_state != FilterState::EXCLUDE) {
+            return false;
+        }
+        return MatchesInternal(entry);
+    }
+    
+    bool Filter::Matches(const LogEntry& entry) const {
+        if (filter_state == FilterState::DISABLED) {
+            return false;
+        }
+
+        auto result = MatchesInternal(entry);
+
+        return filter_state == FilterState::EXCLUDE ? !result : result;
+    }
+    
+    bool Filter::MatchesInternal(const LogEntry& entry) const {
         // First check if this filter matches
         bool this_matches = false;
         
@@ -177,7 +212,7 @@ namespace ue_log {
         }
         
         oss << ": '" << criteria << "'";
-        oss << " (Active: " << (is_active ? "Yes" : "No") << ")";
+        oss << " (Active: " << (IsActive() ? "Yes" : "No") << ")";
         oss << " (Matches: " << match_count << ")";
         
         if (!sub_filters.empty()) {
@@ -295,7 +330,8 @@ namespace ue_log {
         oss << "  \"name\": \"" << EscapeJsonString(name) << "\",\n";
         oss << "  \"type\": " << static_cast<int>(type) << ",\n";
         oss << "  \"criteria\": \"" << EscapeJsonString(criteria) << "\",\n";
-        oss << "  \"is_active\": " << (is_active ? "true" : "false") << ",\n";
+        oss << "  \"filter_state\": " << static_cast<int>(filter_state) << ",\n";
+        oss << "  \"is_active\": " << (IsActive() ? "true" : "false") << ",\n";
         oss << "  \"logic\": " << static_cast<int>(logic) << ",\n";
         oss << "  \"highlight_color\": \"" << EscapeJsonString(highlight_color) << "\",\n";
         oss << "  \"match_count\": " << match_count << ",\n";
@@ -345,10 +381,26 @@ namespace ue_log {
             filter->criteria = UnescapeJsonString(json_data.substr(criteria_start, criteria_end - criteria_start));
         }
         
-        // Extract is_active
-        size_t active_start = json_data.find("\"is_active\": ") + 13;
-        if (active_start != std::string::npos) {
-            filter->is_active = json_data.substr(active_start, 4) == "true";
+        // Extract filter_state (new format) or is_active (backward compatibility)
+        size_t state_start = json_data.find("\"filter_state\": ");
+        if (state_start != std::string::npos) {
+            // New format with filter_state
+            state_start += 16;
+            size_t state_end = json_data.find(",", state_start);
+            if (state_end != std::string::npos) {
+                int state_value = std::stoi(json_data.substr(state_start, state_end - state_start));
+                filter->filter_state = static_cast<FilterState>(state_value);
+                filter->is_active = (filter->filter_state != FilterState::DISABLED); // Keep in sync
+            }
+        } else {
+            // Backward compatibility with is_active
+            size_t active_start = json_data.find("\"is_active\": ");
+            if (active_start != std::string::npos) {
+                active_start += 13;
+                bool is_active_value = json_data.substr(active_start, 4) == "true";
+                filter->filter_state = is_active_value ? FilterState::INCLUDE : FilterState::DISABLED;
+                filter->is_active = is_active_value; // Keep in sync
+            }
         }
         
         // Extract logic

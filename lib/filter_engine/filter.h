@@ -20,6 +20,12 @@ namespace ue_log {
         FrameRange        // Frame number range
     };
     
+    enum class FilterState {
+        INCLUDE = 0,      // Show only entries that match (green checkmark)
+        EXCLUDE = 1,      // Hide entries that match (red negative sign)
+        DISABLED = 2      // Ignore filter completely (greyed out)
+    };
+    
     enum class FilterLogic {
         And,              // All sub-filters must match
         Or                // Any sub-filter must match
@@ -32,7 +38,8 @@ namespace ue_log {
         std::string name;
         FilterType type;
         std::string criteria;
-        bool is_active;
+        FilterState filter_state;
+        bool is_active; // Kept for backward compatibility
         std::vector<std::unique_ptr<Filter>> sub_filters;
         FilterLogic logic;
         std::string highlight_color;
@@ -44,24 +51,56 @@ namespace ue_log {
         
     public:
         // Default constructor
-        Filter() : type(FilterType::TextContains), is_active(true), 
-                  logic(FilterLogic::And), match_count(0), 
+        Filter() : type(FilterType::TextContains), filter_state(FilterState::INCLUDE), 
+                  is_active(true), logic(FilterLogic::And), match_count(0), 
                   regex_compilation_attempted(false) {}
         
         // Main constructor
         Filter(const std::string& filter_name, FilterType filter_type, const std::string& filter_criteria)
             : name(filter_name), type(filter_type), criteria(filter_criteria), 
-              is_active(true), logic(FilterLogic::And), highlight_color(""), 
+              filter_state(FilterState::INCLUDE), is_active(true), logic(FilterLogic::And), highlight_color(""), 
               match_count(0), regex_compilation_attempted(false) {}
         
         // Properties using macros
         CK_PROPERTY(name);
         CK_PROPERTY(type);
         CK_PROPERTY(criteria);
-        CK_PROPERTY(is_active);
+        CK_PROPERTY(filter_state);
         CK_PROPERTY(logic);
         CK_PROPERTY(highlight_color);
         CK_PROPERTY_GET(match_count);
+        
+        // Manual is_active property for backward compatibility
+        const bool& Get_is_active() const { return is_active; }
+        bool& Get_is_active() { return is_active; }
+        auto Request_is_active(const bool& value) -> Filter& { 
+            SetActive(value); 
+            return *this; 
+        }
+        auto Updateis_active(std::function<void(bool&)> func) -> Filter& {
+            func(is_active);
+            SetFilterState(is_active ? FilterState::INCLUDE : FilterState::DISABLED);
+            return *this;
+        }
+        
+        // Filter state management
+        FilterState GetFilterState() const { return filter_state; }
+        void SetFilterState(FilterState state) { 
+            filter_state = state; 
+            is_active = (state != FilterState::DISABLED); // Keep in sync
+        }
+        void CycleFilterState();
+        
+        // Backward compatibility methods for existing is_active API
+        bool IsActive() const { return filter_state != FilterState::DISABLED; }
+        void SetActive(bool active) { 
+            filter_state = active ? FilterState::INCLUDE : FilterState::DISABLED;
+            is_active = active; // Keep in sync
+        }
+        
+        // New matching helper methods
+        bool ShouldInclude(const LogEntry& entry) const;
+        bool ShouldExclude(const LogEntry& entry) const;
         
         // Sub-filter management
         void AddSubFilter(std::unique_ptr<Filter> sub_filter);
@@ -104,6 +143,7 @@ namespace ue_log {
         // Helper methods
         const std::regex& GetCompiledRegex() const;
         bool CompileRegex() const;
+        bool MatchesInternal(const LogEntry& entry) const;
     };
     
 } // namespace ue_log

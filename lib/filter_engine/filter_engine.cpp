@@ -109,21 +109,58 @@ namespace ue_log {
             return true;
         }
         
-        // Entry passes if ANY primary filter matches (OR logic between primary filters)
+        bool has_include_filters = false;
+        bool has_exclude_filters = false;
+        bool passes_include = false;
+        bool passes_exclude = true; // Start with true, exclude filters will set to false
+        
+        // First pass: check what types of filters we have and apply them
         for (const auto& filter : primary_filters) {
-            if (filter && filter->Get_is_active() && filter->Matches(entry)) {
-                return true;
+            if (!filter || filter->GetFilterState() == FilterState::DISABLED) {
+                continue;
+            }
+            
+            if (filter->GetFilterState() == FilterState::INCLUDE) {
+                has_include_filters = true;
+                if (filter->ShouldInclude(entry)) {
+                    passes_include = true;
+                }
+            } else if (filter->GetFilterState() == FilterState::EXCLUDE) {
+                has_exclude_filters = true;
+                if (filter->ShouldExclude(entry)) {
+                    passes_exclude = false; // Entry is excluded
+                }
             }
         }
         
-        return false;
+        // Apply logic:
+        // - If we have include filters, entry must pass at least one
+        // - If we have exclude filters, entry must not be excluded by any
+        // - If we have both, entry must pass include AND not be excluded
+        
+        if (has_include_filters && has_exclude_filters) {
+            return passes_include && passes_exclude;
+        } else if (has_include_filters) {
+            return passes_include;
+        } else if (has_exclude_filters) {
+            return passes_exclude;
+        }
+        
+        // No active filters (shouldn't reach here due to check above)
+        return true;
     }
     
     std::vector<const Filter*> FilterEngine::GetMatchingFilters(const LogEntry& entry) {
         std::vector<const Filter*> matching_filters;
         
         for (const auto& filter : primary_filters) {
-            if (filter && filter->Get_is_active() && filter->Matches(entry)) {
+            if (!filter || filter->GetFilterState() == FilterState::DISABLED) {
+                continue;
+            }
+            
+            // A filter "matches" if it would affect the entry (either include or exclude)
+            if ((filter->GetFilterState() == FilterState::INCLUDE && filter->ShouldInclude(entry)) ||
+                (filter->GetFilterState() == FilterState::EXCLUDE && filter->ShouldExclude(entry))) {
                 matching_filters.push_back(filter.get());
             }
         }
@@ -158,7 +195,7 @@ namespace ue_log {
         size_t active_count = 0;
         
         for (const auto& filter : primary_filters) {
-            if (filter && filter->Get_is_active()) {
+            if (filter && filter->GetFilterState() != FilterState::DISABLED) {
                 active_count++;
             }
         }
@@ -170,7 +207,7 @@ namespace ue_log {
         std::vector<Filter*> active_filters;
         
         for (const auto& filter : primary_filters) {
-            if (filter && filter->Get_is_active()) {
+            if (filter && filter->GetFilterState() != FilterState::DISABLED) {
                 active_filters.push_back(filter.get());
             }
         }

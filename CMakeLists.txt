@@ -140,6 +140,15 @@ target_link_libraries(unreal_log_tests
   PRIVATE ftxui::component
 )
 
+# Create debug test executable
+add_executable(test_exclude_debug
+  test_exclude_debug.cpp
+)
+
+target_link_libraries(test_exclude_debug
+  PRIVATE unreal_log_lib
+)
+
 # Compiler-specific options for all targets
 if(MSVC)
     target_compile_options(unreal_log_lib PRIVATE /W4)
@@ -201,6 +210,29 @@ add_executable(test_visual_hierarchy
 
 # Link visual hierarchy test dependencies
 target_link_libraries(test_visual_hierarchy
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a three-state filters test executable
+add_executable(test_three_state_filters
+  test_three_state_filters.cpp
+)
+
+# Link three-state filters test dependencies
+target_link_libraries(test_three_state_filters
+  PRIVATE unreal_log_lib
+)
+
+# Create a UI three-state filters test executable
+add_executable(test_ui_three_state
+  test_ui_three_state.cpp
+)
+
+# Link UI three-state filters test dependencies
+target_link_libraries(test_ui_three_state
   PRIVATE unreal_log_lib
   PRIVATE ftxui::screen
   PRIVATE ftxui::dom
