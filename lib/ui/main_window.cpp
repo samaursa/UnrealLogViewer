@@ -11,6 +11,10 @@
 #include <sstream>
 #include <fstream>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 namespace ue_log {
 
 using namespace ftxui;
@@ -149,11 +153,11 @@ public:
         
         // Handle search promotion when search is active but NOT in input mode (after ENTER)
         if (parent_->IsSearchActive() && !parent_->IsSearchInputMode()) {
-            // Allow number keys 1-4 for search promotion
+            // Allow number keys 1-5 for search promotion (matching column layout)
             if (event.is_character() && event.character().length() == 1) {
                 char ch = event.character()[0];
-                if (ch >= '1' && ch <= '4') {
-                    int promotion_type = ch - '1'; // Convert '1'-'4' to 0-3 index
+                if (ch >= '1' && ch <= '5') {
+                    int promotion_type = ch - '1'; // Convert '1'-'5' to 0-4 index
                     parent_->PromoteSearchToColumnFilter(promotion_type);
                     return true;
                 }
@@ -200,11 +204,23 @@ public:
             return true;
         }
         
-        // Handle SHIFT+Number shortcuts for column-based filtering (Shift+1-5) - only when NOT searching
+        // Handle number keys for INCLUDE column-based filtering (1-5) - only when NOT searching
         if (event.is_character() && event.character().length() == 1) {
             char ch = event.character()[0];
             
-            // Check for SHIFT+number keys (!, @, #, $, %) for column-based filtering
+            // Check for number keys 1-5 for include column filtering
+            if (ch >= '1' && ch <= '5') {
+                int column_number = ch - '1'; // Convert '1'-'5' to 0-4 index
+                parent_->CreateDirectColumnFilter(column_number);
+                return true;
+            }
+        }
+        
+        // Handle SHIFT+Number shortcuts for EXCLUDE column-based filtering (Shift+1-5)
+        if (event.is_character() && event.character().length() == 1) {
+            char ch = event.character()[0];
+            
+            // Check for SHIFT+number keys (!, @, #, $, %) for exclude column filtering
             if (ch == '!' || ch == '@' || ch == '#' || ch == '$' || ch == '%') {
                 int column_number;
                 switch (ch) {
@@ -215,7 +231,7 @@ public:
                     case '%': column_number = 4; break; // Shift+5
                     default: column_number = 0; break;
                 }
-                parent_->CreateDirectColumnFilter(column_number);
+                parent_->CreateDirectColumnExcludeFilter(column_number);
                 return true;
             }
         }
@@ -492,6 +508,12 @@ public:
             } else {
                 parent_->StartRealTimeMonitoring();
             }
+            return true;
+        }
+        
+        // Copy current log line to clipboard
+        if (event == Event::Character('y')) {
+            parent_->CopyCurrentLineToClipboard();
             return true;
         }
         
@@ -1823,8 +1845,15 @@ ftxui::Element MainWindow::RenderLogEntry(const LogEntry& entry, bool is_selecte
             }
         }
         
-        // Render using the new LogEntryRenderer
-        Element row = log_entry_renderer_->RenderLogEntry(entry, is_selected, relative_line_number);
+        // Render using the new LogEntryRenderer with search highlighting
+        Element row;
+        if (!search_query_.empty()) {
+            // Use search highlighting if there's an active search
+            bool case_sensitive = HasUppercaseLetters(search_query_);
+            row = log_entry_renderer_->RenderLogEntryWithSearchHighlight(entry, is_selected, relative_line_number, search_query_, case_sensitive);
+        } else {
+            row = log_entry_renderer_->RenderLogEntry(entry, is_selected, relative_line_number);
+        }
         
         // Apply additional styling for context lines and search highlighting
         bool is_match = match_line_numbers_.find(entry.Get_line_number()) != match_line_numbers_.end();
@@ -2207,8 +2236,8 @@ void MainWindow::ClearSearch() {
 void MainWindow::AppendToSearch(const std::string& text) {
     search_query_ += text;
     last_error_ = "Search: " + search_query_ + " (Enter to confirm, + to promote, Esc to cancel)";
-    // Perform search in real-time
-    PerformSearch(search_query_);
+    // Perform search for highlighting but don't jump to results while typing
+    PerformSearchHighlightOnly(search_query_);
 }
 
 void MainWindow::ConfirmSearch() {
@@ -2233,7 +2262,8 @@ void MainWindow::BackspaceSearch() {
             search_result_index_ = -1;
         } else {
             last_error_ = "Search: " + search_query_ + " (Enter to confirm, + to promote, Esc to cancel)";
-            PerformSearch(search_query_);
+            // Perform search for highlighting but don't jump to results while typing
+            PerformSearchHighlightOnly(search_query_);
         }
     }
 }
@@ -2766,7 +2796,7 @@ void MainWindow::PromoteSearchToFilter() {
     }
     
     show_search_promotion_ = true;
-    last_error_ = "Promote search '" + search_query_ + "' to filter: [1] Message contains [2] LogLevel equals [3] Logger contains [4] Any field contains";
+    last_error_ = "Promote search '" + search_query_ + "' to filter: [1] Timestamp after [2] Frame after [3] Logger contains [4] Level equals [5] Message contains";
 }
 
 void MainWindow::ShowSearchPromotionDialog() {
@@ -3484,27 +3514,31 @@ void MainWindow::PromoteSearchToColumnFilter(int column_number) {
     // Store the search query before it gets cleared
     std::string current_search_query = search_query_;
     
-    // Map column numbers to filter types for search promotion
-    // Key 1: Message Contains, Key 2: LogLevel equals, Key 3: Logger Contains, Key 4: Any Field Contains
+    // Map column numbers to filter types for search promotion (matching column layout)
+    // Key 1: Timestamp, Key 2: Frame, Key 3: Logger, Key 4: Level, Key 5: Message
     FilterConditionType filter_type;
     std::string filter_description;
     
     switch (column_number) {
-        case 0: // Key 1 - Message contains
-            filter_type = FilterConditionType::MessageContains;
-            filter_description = "Message contains";
+        case 0: // Key 1 - Timestamp (treat search as timestamp contains)
+            filter_type = FilterConditionType::TimestampAfter;
+            filter_description = "Timestamp after";
             break;
-        case 1: // Key 2 - LogLevel equals
-            filter_type = FilterConditionType::LogLevelEquals;
-            filter_description = "LogLevel equals";
+        case 1: // Key 2 - Frame (treat search as frame after)
+            filter_type = FilterConditionType::FrameAfter;
+            filter_description = "Frame after";
             break;
         case 2: // Key 3 - Logger contains
             filter_type = FilterConditionType::LoggerContains;
             filter_description = "Logger contains";
             break;
-        case 3: // Key 4 - Any field contains
-            filter_type = FilterConditionType::AnyFieldContains;
-            filter_description = "Any field contains";
+        case 3: // Key 4 - Level equals
+            filter_type = FilterConditionType::LogLevelEquals;
+            filter_description = "Level equals";
+            break;
+        case 4: // Key 5 - Message contains
+            filter_type = FilterConditionType::MessageContains;
+            filter_description = "Message contains";
             break;
         default:
             last_error_ = "Invalid search promotion option: " + std::to_string(column_number + 1);
@@ -3739,6 +3773,177 @@ bool MainWindow::ShouldStopTailing(const ftxui::Event& event) const {
     }
     
     return false;
+}
+
+void MainWindow::CreateDirectColumnExcludeFilter(int column_number) {
+    // Check if we have a selected entry
+    if (selected_entry_index_ < 0 || selected_entry_index_ >= static_cast<int>(filtered_entries_.size())) {
+        last_error_ = "No entry selected for column exclude filter";
+        return;
+    }
+    
+    const auto& selected_entry = filtered_entries_[selected_entry_index_];
+    
+    // Create EXCLUDE filter based on column (same logic as include but with exclude flag)
+    std::string filter_name;
+    FilterType filter_type_enum;
+    std::string filter_value;
+    
+    switch (column_number) {
+        case 0: // Timestamp column - exclude entries with this timestamp (exact match)
+            if (selected_entry.Get_timestamp().has_value()) {
+                filter_name = "Exclude timestamp: " + selected_entry.Get_timestamp().value();
+                filter_type_enum = FilterType::TimeRange; // Use TimeRange for timestamp filtering
+                filter_value = selected_entry.Get_timestamp().value();
+            } else {
+                last_error_ = "Selected entry has no timestamp";
+                return;
+            }
+            break;
+        case 1: // Frame column - exclude entries with this frame
+            if (selected_entry.Get_frame_number().has_value()) {
+                filter_name = "Exclude frame: " + std::to_string(selected_entry.Get_frame_number().value());
+                filter_type_enum = FilterType::FrameRange; // Use FrameRange for frame filtering
+                filter_value = std::to_string(selected_entry.Get_frame_number().value());
+            } else {
+                last_error_ = "Selected entry has no frame number";
+                return;
+            }
+            break;
+        case 2: // Logger column - exclude this logger
+            filter_name = "Exclude logger: " + selected_entry.Get_logger_name();
+            filter_type_enum = FilterType::LoggerName;
+            filter_value = selected_entry.Get_logger_name();
+            break;
+        case 3: // Level column - exclude this level
+            if (selected_entry.Get_log_level().has_value()) {
+                filter_name = "Exclude level: " + selected_entry.Get_log_level().value();
+                filter_type_enum = FilterType::LogLevel;
+                filter_value = selected_entry.Get_log_level().value();
+            } else {
+                last_error_ = "Selected entry has no log level";
+                return;
+            }
+            break;
+        case 4: // Message column - exclude messages containing this text
+            filter_name = "Exclude message containing: " + selected_entry.Get_message().substr(0, 50) + "...";
+            filter_type_enum = FilterType::TextContains;
+            filter_value = selected_entry.Get_message();
+            break;
+        default:
+            last_error_ = "Invalid column number: " + std::to_string(column_number + 1);
+            return;
+    }
+    
+    // Create the EXCLUDE filter
+    auto filter = std::make_unique<Filter>(filter_name, filter_type_enum, filter_value);
+    filter->SetFilterState(FilterState::EXCLUDE); // This makes it an exclude filter
+    
+    // Add the filter to the filter engine
+    auto result = filter_engine_->AddFilter(std::move(filter));
+    if (result.IsError()) {
+        last_error_ = "Failed to create exclude filter: " + result.Get_error_message();
+        return;
+    }
+    
+    // Refresh the filter panel to show the new filter
+    if (filter_panel_) {
+        filter_panel_->RefreshFilters();
+    }
+    
+    // Apply filters to update the display
+    OnFiltersChanged();
+    
+    last_error_ = "Exclude filter created: " + filter_name;
+}
+
+void MainWindow::PerformSearchHighlightOnly(const std::string& query) {
+    search_query_ = query;
+    search_results_.clear();
+    search_result_index_ = -1;
+    
+    if (query.empty()) {
+        return;
+    }
+    
+    // Smart case sensitivity: case-sensitive if query contains uppercase, case-insensitive if all lowercase
+    bool case_sensitive = HasUppercaseLetters(query);
+    
+    // Search through filtered entries
+    for (int i = 0; i < static_cast<int>(filtered_entries_.size()); ++i) {
+        const auto& entry = filtered_entries_[i];
+        
+        // Search in message, logger name, and log level
+        std::string search_text = entry.Get_message() + " " + entry.Get_logger_name();
+        if (entry.Get_log_level().has_value()) {
+            search_text += " " + entry.Get_log_level().value();
+        }
+        
+        bool found = false;
+        if (case_sensitive) {
+            // Case-sensitive search
+            found = search_text.find(query) != std::string::npos;
+        } else {
+            // Case-insensitive search
+            std::string lower_query = query;
+            std::string lower_text = search_text;
+            std::transform(lower_query.begin(), lower_query.end(), lower_query.begin(), ::tolower);
+            std::transform(lower_text.begin(), lower_text.end(), lower_text.begin(), ::tolower);
+            found = lower_text.find(lower_query) != std::string::npos;
+        }
+        
+        if (found) {
+            search_results_.push_back(i);
+        }
+    }
+    
+    // Don't jump to first result - just highlight for now
+    // The user will press Enter to jump to the first result
+}
+
+void MainWindow::CopyCurrentLineToClipboard() {
+    // Check if we have a selected entry
+    if (selected_entry_index_ < 0 || selected_entry_index_ >= static_cast<int>(filtered_entries_.size())) {
+        last_error_ = "No log line selected to copy";
+        return;
+    }
+    
+    const auto& selected_entry = filtered_entries_[selected_entry_index_];
+    
+    // Get the full raw line (original format)
+    std::string line_to_copy = selected_entry.Get_raw_line();
+    
+    // On Windows, we can use the Windows clipboard API
+    #ifdef _WIN32
+    if (OpenClipboard(nullptr)) {
+        EmptyClipboard();
+        
+        // Allocate global memory for the text
+        HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, line_to_copy.size() + 1);
+        if (hMem) {
+            char* pMem = static_cast<char*>(GlobalLock(hMem));
+            if (pMem) {
+                strcpy_s(pMem, line_to_copy.size() + 1, line_to_copy.c_str());
+                GlobalUnlock(hMem);
+                
+                SetClipboardData(CF_TEXT, hMem);
+                last_error_ = "Log line copied to clipboard";
+            } else {
+                GlobalFree(hMem);
+                last_error_ = "Failed to lock clipboard memory";
+            }
+        } else {
+            last_error_ = "Failed to allocate clipboard memory";
+        }
+        
+        CloseClipboard();
+    } else {
+        last_error_ = "Failed to open clipboard";
+    }
+    #else
+    // For non-Windows systems, we could use xclip or pbcopy, but for now just show an error
+    last_error_ = "Clipboard functionality not implemented for this platform";
+    #endif
 }
 
 } // namespace ue_log

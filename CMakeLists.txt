@@ -410,3 +410,28 @@ target_link_libraries(test_file_browser_demo
   PRIVATE ftxui::dom
   PRIVATE ftxui::component
 )
+# Create a new features test executable
+add_executable(test_new_features
+  test_new_features.cpp
+)
+
+# Link new features test dependencies
+target_link_libraries(test_new_features
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a keyboard shortcuts test executable
+add_executable(test_keyboard_shortcuts
+  test_keyboard_shortcuts.cpp
+)
+
+# Link keyboard shortcuts test dependencies
+target_link_libraries(test_keyboard_shortcuts
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)

@@ -37,6 +37,20 @@ public:
                                  int relative_line_number = 0) const;
     
     /**
+     * Render a complete log entry with search highlighting.
+     * @param entry The log entry to render
+     * @param is_selected Whether this entry is currently selected
+     * @param relative_line_number Optional relative line number for vim-style display
+     * @param search_query The search query to highlight
+     * @param case_sensitive Whether the search is case sensitive
+     * @return FTXUI Element representing the rendered log entry with search highlighting
+     */
+    ftxui::Element RenderLogEntryWithSearchHighlight(const LogEntry& entry, bool is_selected, 
+                                                     int relative_line_number,
+                                                     const std::string& search_query, 
+                                                     bool case_sensitive) const;
+    
+    /**
      * Render the table header with column labels.
      * @return FTXUI Element representing the table header
      */
@@ -87,6 +101,18 @@ public:
      * @return FTXUI Element for the message column
      */
     ftxui::Element RenderMessage(const LogEntry& entry, bool is_selected) const;
+    
+    /**
+     * Render message column with search highlighting.
+     * @param entry The log entry containing the message
+     * @param is_selected Whether this entry is selected
+     * @param search_query The search query to highlight
+     * @param case_sensitive Whether the search is case sensitive
+     * @return FTXUI Element for the message column with search highlighting
+     */
+    ftxui::Element RenderMessageWithSearchHighlight(const LogEntry& entry, bool is_selected, 
+                                                   const std::string& search_query, 
+                                                   bool case_sensitive) const;
     
     // Configuration methods
     
@@ -167,6 +193,17 @@ private:
      * @return Styled FTXUI Element with appropriate visual hierarchy
      */
     ftxui::Element ApplyRowLevelHierarchy(ftxui::Element element, const std::string& level, bool is_selected) const;
+    
+    /**
+     * Apply row-level visual hierarchy styling with search match indication.
+     * @param element The row element to style
+     * @param level The log level string
+     * @param is_selected Whether the row is currently selected
+     * @param is_search_match Whether this row contains a search match
+     * @return Styled FTXUI Element with appropriate visual hierarchy and search indication
+     */
+    ftxui::Element ApplyRowLevelHierarchyWithSearch(ftxui::Element element, const std::string& level, 
+                                                   bool is_selected, bool is_search_match) const;
     
     /**
      * Truncate text to fit within a maximum width.

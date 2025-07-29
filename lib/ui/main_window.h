@@ -239,6 +239,7 @@ public:
     void ShowSearch();
     void HideSearch();
     void PerformSearch(const std::string& query);
+    void PerformSearchHighlightOnly(const std::string& query);
     void FindNext();
     void FindPrevious();
     void ClearSearch();
@@ -276,6 +277,7 @@ public:
     // Enhanced search and column filtering
     void PromoteSearchToColumnFilter(int column_number);
     void CreateDirectColumnFilter(int column_number);
+    void CreateDirectColumnExcludeFilter(int column_number);
     void CreateFilterFromSearchAndColumn(FilterConditionType type, const std::string& search_term);
     
     // Direct column filter helper methods
@@ -359,6 +361,9 @@ public:
     void OnFileSelected(const std::string& file_path);
     void EnterFileBrowserMode(const std::string& directory_path);
     void EnterLogViewerMode(const std::string& file_path);
+    
+    // Clipboard functionality
+    void CopyCurrentLineToClipboard();
 
 private:
     // FTXUI component
