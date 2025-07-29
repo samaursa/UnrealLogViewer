@@ -1579,7 +1579,16 @@ ftxui::Element MainWindow::RenderLogTable() const {
     bool main_has_focus = !filter_panel_ || !filter_panel_->IsFocused();
     
     // Create scrollable content that fills available space
-    Element scrollable_content = vbox(rows) | vscroll_indicator | yframe | yflex;
+    Element scrollable_content = vbox(rows) | yframe | yflex;
+    
+    // Add custom scrollbar if we have entries
+    if (!filtered_entries_.empty()) {
+        Element custom_scrollbar = RenderCustomScrollbar();
+        scrollable_content = hbox({
+            scrollable_content | flex,
+            custom_scrollbar
+        });
+    }
     
     // We'll rely on EnsureSelectionVisible to handle scrolling to the selected entry
     
@@ -1802,6 +1811,45 @@ ftxui::Element MainWindow::RenderDetailView() const {
     return window_content;
 }
 
+ftxui::Element MainWindow::RenderCustomScrollbar() const {
+    using namespace ftxui;
+    
+    if (filtered_entries_.empty()) {
+        return text(" ") | yflex;
+    }
+    
+    int total_entries = static_cast<int>(filtered_entries_.size());
+    int current_position = selected_entry_index_;
+    int visible_height = GetVisibleHeight();
+    
+    // Use a much larger height to ensure the scrollbar spans the full area
+    // This should be larger than any reasonable window height
+    int scrollbar_height = std::max(50, visible_height * 3);
+    
+    // Calculate position and size ratios
+    double position_ratio = static_cast<double>(current_position) / std::max(1, total_entries - 1);
+    double visible_ratio = std::min(1.0, static_cast<double>(visible_height) / static_cast<double>(total_entries));
+    
+    // Calculate thumb size and position
+    int thumb_size = std::max(2, static_cast<int>(scrollbar_height * visible_ratio));
+    int thumb_position = static_cast<int>((scrollbar_height - thumb_size) * position_ratio);
+    
+    // Create scrollbar elements
+    std::vector<Element> scrollbar_elements;
+    
+    for (int i = 0; i < scrollbar_height; ++i) {
+        if (i >= thumb_position && i < thumb_position + thumb_size) {
+            // Thumb part - use a solid block character
+            scrollbar_elements.push_back(text("█") | color(Color::White) | bgcolor(Color::Blue));
+        } else {
+            // Track part - use a lighter character
+            scrollbar_elements.push_back(text("│") | color(Color::GrayDark));
+        }
+    }
+    
+    return vbox(scrollbar_elements) | size(WIDTH, EQUAL, 1) | yflex;
+}
+
 ftxui::Element MainWindow::RenderHelpDialog() const {
     std::vector<Element> help_lines = {
         text("Unreal Log Viewer - Help") | bold | center,
@@ -1847,10 +1895,20 @@ ftxui::Element MainWindow::RenderLogEntry(const LogEntry& entry, bool is_selecte
         
         // Render using the new LogEntryRenderer with search highlighting
         Element row;
+        std::string highlight_term;
+        
+        // Priority: active search query first, then selected filter term
         if (!search_query_.empty()) {
-            // Use search highlighting if there's an active search
-            bool case_sensitive = HasUppercaseLetters(search_query_);
-            row = log_entry_renderer_->RenderLogEntryWithSearchHighlight(entry, is_selected, relative_line_number, search_query_, case_sensitive);
+            highlight_term = search_query_;
+        } else {
+            highlight_term = GetFilterHighlightTerm();
+        }
+        
+        if (!highlight_term.empty()) {
+            // Use search highlighting if there's a term to highlight
+            bool case_sensitive = HasUppercaseLetters(highlight_term);
+            bool is_filter_highlight = search_query_.empty(); // If no active search, this is a filter highlight
+            row = log_entry_renderer_->RenderLogEntryWithSearchHighlight(entry, is_selected, relative_line_number, highlight_term, case_sensitive, is_filter_highlight);
         } else {
             row = log_entry_renderer_->RenderLogEntry(entry, is_selected, relative_line_number);
         }
@@ -2210,8 +2268,26 @@ void MainWindow::FindNext() {
         return;
     }
     
-    search_result_index_ = (search_result_index_ + 1) % static_cast<int>(search_results_.size());
-    SelectEntry(search_results_[search_result_index_]);
+    // If we have an active search, find the next result from current position
+    if (search_result_index_ >= 0) {
+        // Find next result after current position
+        int current_pos = selected_entry_index_;
+        for (int i = 0; i < static_cast<int>(search_results_.size()); ++i) {
+            int result_idx = search_results_[i];
+            if (result_idx > current_pos) {
+                search_result_index_ = i;
+                SelectEntry(result_idx);
+                return;
+            }
+        }
+        // If no result found after current position, wrap to first result
+        search_result_index_ = 0;
+        SelectEntry(search_results_[0]);
+    } else {
+        // No current search position, go to first result
+        search_result_index_ = 0;
+        SelectEntry(search_results_[0]);
+    }
 }
 
 void MainWindow::FindPrevious() {
@@ -2219,11 +2295,26 @@ void MainWindow::FindPrevious() {
         return;
     }
     
-    search_result_index_--;
-    if (search_result_index_ < 0) {
+    // If we have an active search, find the previous result from current position
+    if (search_result_index_ >= 0) {
+        // Find previous result before current position
+        int current_pos = selected_entry_index_;
+        for (int i = static_cast<int>(search_results_.size()) - 1; i >= 0; --i) {
+            int result_idx = search_results_[i];
+            if (result_idx < current_pos) {
+                search_result_index_ = i;
+                SelectEntry(result_idx);
+                return;
+            }
+        }
+        // If no result found before current position, wrap to last result
         search_result_index_ = static_cast<int>(search_results_.size()) - 1;
+        SelectEntry(search_results_[search_result_index_]);
+    } else {
+        // No current search position, go to last result
+        search_result_index_ = static_cast<int>(search_results_.size()) - 1;
+        SelectEntry(search_results_[search_result_index_]);
     }
-    SelectEntry(search_results_[search_result_index_]);
 }
 
 void MainWindow::ClearSearch() {
@@ -3944,6 +4035,34 @@ void MainWindow::CopyCurrentLineToClipboard() {
     // For non-Windows systems, we could use xclip or pbcopy, but for now just show an error
     last_error_ = "Clipboard functionality not implemented for this platform";
     #endif
+}
+
+std::string MainWindow::GetFilterHighlightTerm() const {
+    // Only highlight if filter panel is visible and has a selected filter
+    if (!filter_panel_ || !show_filter_panel_) {
+        return "";
+    }
+    
+    const Filter* selected_filter = filter_panel_->GetSelectedFilter();
+    if (!selected_filter) {
+        return "";
+    }
+    
+    // Only highlight for INCLUDE filters, not EXCLUDE filters
+    if (selected_filter->GetFilterState() != FilterState::INCLUDE) {
+        return "";
+    }
+    
+    // Only highlight for text-based filters that contain search terms
+    FilterType filter_type = selected_filter->Get_type();
+    if (filter_type == FilterType::TextContains || 
+        filter_type == FilterType::TextExact || 
+        filter_type == FilterType::LoggerName ||
+        filter_type == FilterType::LogLevel) {
+        return selected_filter->Get_criteria();
+    }
+    
+    return "";
 }
 
 } // namespace ue_log

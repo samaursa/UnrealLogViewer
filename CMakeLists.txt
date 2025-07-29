@@ -435,3 +435,133 @@ target_link_libraries(test_keyboard_shortcuts
   PRIVATE ftxui::dom
   PRIVATE ftxui::component
 )
+
+# Create a filter highlighting test executable
+add_executable(test_filter_highlighting
+  test_filter_highlighting.cpp
+)
+
+# Link filter highlighting test dependencies
+target_link_libraries(test_filter_highlighting
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a highlighting bug test executable
+add_executable(test_highlighting_bug
+  test_highlighting_bug.cpp
+)
+
+# Link highlighting bug test dependencies
+target_link_libraries(test_highlighting_bug
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a search promotion bug test executable
+add_executable(test_search_promotion_bug
+  test_search_promotion_bug.cpp
+)
+
+# Link search promotion bug test dependencies
+target_link_libraries(test_search_promotion_bug
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a filter duplication debug test executable
+add_executable(test_filter_duplication_debug
+  test_filter_duplication_debug.cpp
+)
+
+# Link filter duplication debug test dependencies
+target_link_libraries(test_filter_duplication_debug
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a character consumption fix test executable
+add_executable(test_character_consumption_fix
+  test_character_consumption_fix.cpp
+)
+
+# Link character consumption fix test dependencies
+target_link_libraries(test_character_consumption_fix
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a search scrollbar fix test executable
+add_executable(test_search_scrollbar_fix
+  test_search_scrollbar_fix.cpp
+)
+
+# Link search scrollbar fix test dependencies
+target_link_libraries(test_search_scrollbar_fix
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a comprehensive search scrollbar test executable
+add_executable(test_search_scrollbar_comprehensive
+  test_search_scrollbar_comprehensive.cpp
+)
+
+# Link comprehensive search scrollbar test dependencies
+target_link_libraries(test_search_scrollbar_comprehensive
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a scrollbar visual test executable
+add_executable(test_scrollbar_visual
+  test_scrollbar_visual.cpp
+)
+
+# Link scrollbar visual test dependencies
+target_link_libraries(test_scrollbar_visual
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a scrollbar debug test executable
+add_executable(test_scrollbar_debug
+  test_scrollbar_debug.cpp
+)
+
+# Link scrollbar debug test dependencies
+target_link_libraries(test_scrollbar_debug
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a tall scrollbar test executable
+add_executable(test_scrollbar_tall
+  test_scrollbar_tall.cpp
+)
+
+# Link tall scrollbar test dependencies
+target_link_libraries(test_scrollbar_tall
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)

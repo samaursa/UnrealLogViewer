@@ -364,6 +364,9 @@ public:
     
     // Clipboard functionality
     void CopyCurrentLineToClipboard();
+    
+    // Filter highlighting functionality
+    std::string GetFilterHighlightTerm() const;
 
 private:
     // FTXUI component
@@ -479,6 +482,7 @@ private:
     ftxui::Element RenderDetailView() const;
     ftxui::Element RenderQuickFilterDialog() const;
     ftxui::Element RenderJumpDialog() const;
+    ftxui::Element RenderCustomScrollbar() const;
     ftxui::Color GetColorForLogLevel(const std::string& level) const;
     
     // Mode-specific rendering

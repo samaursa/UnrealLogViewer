@@ -1,0 +1,10 @@
+[2024-01-01 10:00:00] INFO: Starting application
+[2024-01-01 10:00:01] DEBUG: Loading configuration
+[2024-01-01 10:00:02] INFO: This is a test message
+[2024-01-01 10:00:03] WARNING: Memory usage high
+[2024-01-01 10:00:04] ERROR: Failed to connect
+[2024-01-01 10:00:05] INFO: Another test entry here
+[2024-01-01 10:00:06] DEBUG: Processing data
+[2024-01-01 10:00:07] INFO: Test completed successfully
+[2024-01-01 10:00:08] INFO: Shutting down
+[2024-01-01 10:00:09] INFO: Final test message

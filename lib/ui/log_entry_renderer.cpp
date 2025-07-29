@@ -347,13 +347,19 @@ Element LogEntryRenderer::ApplyRowLevelHierarchy(Element element, const std::str
 }
 
 Element LogEntryRenderer::ApplyRowLevelHierarchyWithSearch(Element element, const std::string& level, 
-                                                          bool is_selected, bool is_search_match) const {
+                                                          bool is_selected, bool is_search_match, 
+                                                          bool is_filter_highlight) const {
     // Get the appropriate indicator color for this log level
     Color indicator_color;
     
     if (is_search_match) {
-        // Use a distinct color for search matches - bright cyan to stand out
-        indicator_color = Color::Cyan;
+        if (is_filter_highlight) {
+            // Use a distinct color for filter highlights - bright magenta to distinguish from search
+            indicator_color = Color::Magenta;
+        } else {
+            // Use cyan for search matches
+            indicator_color = Color::Cyan;
+        }
     } else if (level == "Error") {
         indicator_color = theme_manager_->GetLogLevelColor("Error");
         // Errors get a subtle red background tint for the entire row (unless selected)
@@ -439,7 +445,8 @@ Element LogEntryRenderer::CreateSeparator() const {
 Element LogEntryRenderer::RenderLogEntryWithSearchHighlight(const LogEntry& entry, bool is_selected, 
                                                            int relative_line_number,
                                                            const std::string& search_query, 
-                                                           bool case_sensitive) const {
+                                                           bool case_sensitive,
+                                                           bool is_filter_highlight) const {
     std::vector<Element> row_elements;
     
     // Get column spacing configuration
@@ -494,7 +501,7 @@ Element LogEntryRenderer::RenderLogEntryWithSearchHighlight(const LogEntry& entr
     
     // Apply row-level visual hierarchy with search indication
     std::string level = entry.Get_log_level().has_value() ? entry.Get_log_level().value() : "";
-    row = ApplyRowLevelHierarchyWithSearch(row, level, is_selected, is_search_match);
+    row = ApplyRowLevelHierarchyWithSearch(row, level, is_selected, is_search_match, is_filter_highlight);
     
     // Apply selection highlighting (after hierarchy styling to ensure it takes precedence)
     if (is_selected) {
@@ -518,59 +525,75 @@ Element LogEntryRenderer::RenderMessageWithSearchHighlight(const LogEntry& entry
     
     // Find all matches in the message
     std::vector<size_t> match_positions;
-    std::string search_text = message;
-    std::string query = search_query;
     
-    if (!case_sensitive) {
+    if (case_sensitive) {
+        // Case-sensitive: search directly in original message
+        size_t pos = 0;
+        while ((pos = message.find(search_query, pos)) != std::string::npos) {
+            match_positions.push_back(pos);
+            pos += search_query.length();
+        }
+    } else {
+        // Case-insensitive: find positions but validate against original text
+        std::string search_text = message;
+        std::string query = search_query;
         std::transform(search_text.begin(), search_text.end(), search_text.begin(), ::tolower);
         std::transform(query.begin(), query.end(), query.begin(), ::tolower);
-    }
-    
-    size_t pos = 0;
-    while ((pos = search_text.find(query, pos)) != std::string::npos) {
-        match_positions.push_back(pos);
-        pos += query.length();
+        
+        size_t pos = 0;
+        while ((pos = search_text.find(query, pos)) != std::string::npos) {
+            // Validate that this position makes sense in the original text
+            if (pos + search_query.length() <= message.length()) {
+                match_positions.push_back(pos);
+            }
+            pos += query.length();
+        }
     }
     
     if (match_positions.empty()) {
         return RenderMessage(entry, is_selected);
     }
     
-    // Build highlighted message
+    // Build highlighted message with bounds checking
     size_t last_pos = 0;
     
     for (size_t match_pos : match_positions) {
+        // Validate match position is within bounds
+        if (match_pos >= message.length()) {
+            continue; // Skip invalid positions
+        }
+        
         // Add text before the match
         if (match_pos > last_pos) {
-            std::string before_match = message.substr(last_pos, match_pos - last_pos);
-            if (word_wrap_enabled_) {
-                elements.push_back(paragraph(before_match));
-            } else {
+            size_t before_length = match_pos - last_pos;
+            if (last_pos + before_length <= message.length()) {
+                std::string before_match = message.substr(last_pos, before_length);
+                // Always use text() for consistency in hbox - word wrapping handled at higher level
                 elements.push_back(text(before_match));
             }
         }
         
-        // Add highlighted match
-        std::string match_text = message.substr(match_pos, search_query.length());
-        Element highlighted_match = text(match_text) | bgcolor(Color::Yellow) | color(Color::Black) | bold;
-        elements.push_back(highlighted_match);
-        
-        last_pos = match_pos + search_query.length();
+        // Add highlighted match - always use original search_query length
+        size_t match_length = search_query.length();
+        if (match_pos + match_length <= message.length()) {
+            std::string match_text = message.substr(match_pos, match_length);
+            Element highlighted_match = text(match_text) | bgcolor(Color::Yellow) | color(Color::Black) | bold;
+            elements.push_back(highlighted_match);
+            
+            last_pos = match_pos + match_length;
+        }
     }
     
     // Add remaining text after the last match
     if (last_pos < message.length()) {
         std::string after_matches = message.substr(last_pos);
-        if (word_wrap_enabled_) {
-            elements.push_back(paragraph(after_matches));
-        } else {
-            elements.push_back(text(after_matches));
-        }
+        // Always use text() for consistency in hbox - word wrapping handled at higher level
+        elements.push_back(text(after_matches));
     }
     
     Element result = hbox(elements);
     
-    // Apply word wrapping if enabled
+    // Apply word wrapping if enabled - handle at the container level
     if (word_wrap_enabled_) {
         result = result | flex;
     }

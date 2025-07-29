@@ -43,12 +43,14 @@ public:
      * @param relative_line_number Optional relative line number for vim-style display
      * @param search_query The search query to highlight
      * @param case_sensitive Whether the search is case sensitive
+     * @param is_filter_highlight Whether this is a filter highlight (vs search highlight)
      * @return FTXUI Element representing the rendered log entry with search highlighting
      */
     ftxui::Element RenderLogEntryWithSearchHighlight(const LogEntry& entry, bool is_selected, 
                                                      int relative_line_number,
                                                      const std::string& search_query, 
-                                                     bool case_sensitive) const;
+                                                     bool case_sensitive,
+                                                     bool is_filter_highlight = false) const;
     
     /**
      * Render the table header with column labels.
@@ -200,10 +202,12 @@ private:
      * @param level The log level string
      * @param is_selected Whether the row is currently selected
      * @param is_search_match Whether this row contains a search match
+     * @param is_filter_highlight Whether this is a filter highlight (vs search highlight)
      * @return Styled FTXUI Element with appropriate visual hierarchy and search indication
      */
     ftxui::Element ApplyRowLevelHierarchyWithSearch(ftxui::Element element, const std::string& level, 
-                                                   bool is_selected, bool is_search_match) const;
+                                                   bool is_selected, bool is_search_match, 
+                                                   bool is_filter_highlight = false) const;
     
     /**
      * Truncate text to fit within a maximum width.
