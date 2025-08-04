@@ -92,6 +92,20 @@ public:
      * @return FTXUI Color for highlights
      */
     ftxui::Color GetHighlightColor() const;
+    
+    /**
+     * Get the color for visual selection highlighting (vim-style visual mode).
+     * This is distinct from normal selection highlighting.
+     * @return FTXUI Color for visual selection text
+     */
+    ftxui::Color GetVisualSelectionColor() const;
+    
+    /**
+     * Get the background color for visual selection highlighting (vim-style visual mode).
+     * This is distinct from normal selection highlighting.
+     * @return FTXUI Color for visual selection background
+     */
+    ftxui::Color GetVisualSelectionBackgroundColor() const;
 
     // Layout configuration methods
     

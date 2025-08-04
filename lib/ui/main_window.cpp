@@ -27,14 +27,70 @@ public:
         return parent_->Render();
     }
     
+    bool HandleVisualSelectionEvent(Event event) {
+        // ESC - Exit visual selection mode
+        if (event == Event::Escape) {
+            parent_->ExitVisualSelectionMode();
+            return true;
+        }
+        
+        // y - Copy selection and exit
+        if (event == Event::Character('y')) {
+            parent_->CopyVisualSelectionToClipboard();
+            parent_->ExitVisualSelectionMode();
+            return true;
+        }
+        
+        // Navigation keys - extend selection
+        if (event == Event::Character('j') || event == Event::ArrowDown) {
+            // Extend selection down by one line
+            int current_index = parent_->GetSelectedEntryIndex();
+            parent_->ExtendVisualSelection(current_index + 1);
+            return true;
+        }
+        
+        if (event == Event::Character('k') || event == Event::ArrowUp) {
+            // Extend selection up by one line
+            int current_index = parent_->GetSelectedEntryIndex();
+            parent_->ExtendVisualSelection(current_index - 1);
+            return true;
+        }
+        
+        // Ctrl+d/u for half-page navigation
+        if (event == Event::Character(static_cast<char>(4))) { // Ctrl+D (ASCII 4)
+            // Extend selection down by half a screen
+            int current_index = parent_->GetSelectedEntryIndex();
+            int half_page = std::max(1, parent_->GetVisibleHeight() / 2);
+            parent_->ExtendVisualSelection(current_index + half_page);
+            return true;
+        }
+        
+        if (event == Event::Character(static_cast<char>(21))) { // Ctrl+U (ASCII 21)
+            // Extend selection up by half a screen
+            int current_index = parent_->GetSelectedEntryIndex();
+            int half_page = std::max(1, parent_->GetVisibleHeight() / 2);
+            parent_->ExtendVisualSelection(current_index - half_page);
+            return true;
+        }
+        
+        // Allow help dialog access
+        if (event == Event::Character('h') || event == Event::Character('?') || event == Event::F1) {
+            // Allow help to be shown in visual selection mode
+            return false; // Let normal help handling take over
+        }
+        
+        // Block all other keys in visual selection mode
+        return true;
+    }
+    
     bool OnEvent(Event event) override {
         // Debug: Log all events
         // std::cout << "Event received" << std::endl;
         
         // Handle file browser mode events first
-        if (parent_->GetMode() == MainWindow::ApplicationMode::FILE_BROWSER) {
+        if (parent_->GetMode() == MainWindow::EApplicationMode::FileBrowser) {
             // Let file browser handle its events
-            if (parent_->file_browser_ && parent_->file_browser_->OnEvent(event)) {
+            if (parent_->_File_Browser_ && parent_->_File_Browser_->OnEvent(event)) {
                 return true;
             }
             
@@ -46,6 +102,11 @@ public:
             
             // All other events are ignored in file browser mode
             return false;
+        }
+        
+        // Handle visual selection mode events
+        if (parent_->IsVisualSelectionMode()) {
+            return HandleVisualSelectionEvent(event);
         }
         
         // Handle ESC key - priority order matters!
@@ -517,6 +578,12 @@ public:
             return true;
         }
         
+        // Visual selection mode activation
+        if (event == Event::Character('v')) {
+            parent_->EnterVisualSelectionMode();
+            return true;
+        }
+        
         // Handle Space key for filter toggling when filter panel has focus
         if (event == Event::Character(' ')) {
             if (parent_->GetFilterPanel() && parent_->GetFilterPanel()->IsFocused()) {
@@ -667,29 +734,29 @@ MainWindow::MainWindow() : MainWindow(nullptr) {
 }
 
 MainWindow::MainWindow(ConfigManager* config_manager)
-    : config_manager_(config_manager) {
+    : _Config_Manager_(config_manager) {
     
     // Create owned config manager if none provided
-    if (!config_manager_) {
-        config_manager_ = new ConfigManager();
-        owns_config_manager_ = true;
+    if (!_Config_Manager_) {
+        _Config_Manager_ = new ConfigManager();
+        _Owns_Config_Manager_ = true;
     }
     
     // Initialize backend components
-    log_parser_ = std::make_unique<LogParser>();
-    filter_engine_ = std::make_unique<FilterEngine>();
-    file_monitor_ = std::make_unique<FileMonitor>();
+    _Log_Parser_ = std::make_unique<LogParser>();
+    _Filter_Engine_ = std::make_unique<FilterEngine>();
+    _File_Monitor_ = std::make_unique<FileMonitor>();
     
     // Initialize UI components
-    filter_panel_ = std::make_unique<FilterPanel>(filter_engine_.get(), config_manager_);
-    visual_theme_manager_ = std::make_unique<VisualThemeManager>();
-    relative_line_system_ = std::make_unique<RelativeLineNumberSystem>();
+    _Filter_Panel_ = std::make_unique<FilterPanel>(_Filter_Engine_.get(), _Config_Manager_);
+    _Visual_Theme_Manager_ = std::make_unique<VisualThemeManager>();
+    _Relative_Line_System_ = std::make_unique<RelativeLineNumberSystem>();
 }
 
 MainWindow::~MainWindow() {
     // Clean up owned config manager
-    if (owns_config_manager_) {
-        delete config_manager_;
+    if (_Owns_Config_Manager_) {
+        delete _Config_Manager_;
     }
 }
 
@@ -702,29 +769,29 @@ void MainWindow::Initialize() {
     if (window_height_ <= 0) window_height_ = 30;
     
     // Initialize UI components
-    if (filter_panel_) {
-        filter_panel_->Initialize();
-        filter_panel_->SetCurrentFilterExpression(current_filter_expression_.get());
-        filter_panel_->SetFiltersChangedCallback([this]() {
+    if (_Filter_Panel_) {
+        _Filter_Panel_->Initialize();
+        _Filter_Panel_->SetCurrentFilterExpression(current_filter_expression_.get());
+        _Filter_Panel_->SetFiltersChangedCallback([this]() {
             OnFiltersChanged();
         });
     }
     
     // Initialize visual components
-    if (visual_theme_manager_) {
-        log_entry_renderer_ = std::make_unique<LogEntryRenderer>(visual_theme_manager_.get());
+    if (_Visual_Theme_Manager_) {
+        _Log_Entry_Renderer_ = std::make_unique<LogEntryRenderer>(_Visual_Theme_Manager_.get());
     }
     
     // Apply basic configuration
     ApplyConfiguration();
     
     // Create FTXUI component - use simple main component for now
-    component_ = Make<MainWindowComponent>(this);
+    _Component_ = Make<MainWindowComponent>(this);
 }
 
 ftxui::Element MainWindow::Render() const {
     // Handle different application modes
-    if (current_mode_ == ApplicationMode::FILE_BROWSER) {
+    if (_Current_Mode_ == EApplicationMode::FileBrowser) {
         return RenderFileBrowserMode();
     } else {
         return RenderLogViewerMode();
@@ -737,8 +804,8 @@ ftxui::Element MainWindow::RenderFileBrowserMode() const {
     std::vector<Element> main_elements;
     
     // Add file browser (takes most of the space)
-    if (file_browser_) {
-        main_elements.push_back(file_browser_->Render() | flex);
+    if (_File_Browser_) {
+        main_elements.push_back(_File_Browser_->Render() | flex);
     } else {
         main_elements.push_back(text("File browser not initialized") | center | flex);
     }
@@ -782,8 +849,8 @@ ftxui::Element MainWindow::RenderLogViewerMode() const {
     Element main_content = vbox(main_elements);
     
     // Add filter panel if enabled (on the left side)
-    if (show_filter_panel_ && filter_panel_) {
-        Element filter_panel = filter_panel_->Render() | size(WIDTH, EQUAL, 60);
+    if (show_filter_panel_ && _Filter_Panel_) {
+        Element filter_panel = _Filter_Panel_->Render() | size(WIDTH, EQUAL, 60);
         main_content = hbox({
             filter_panel,
             separator(),
@@ -795,52 +862,52 @@ ftxui::Element MainWindow::RenderLogViewerMode() const {
 }
 
 ftxui::Component MainWindow::CreateFTXUIComponent() {
-    if (!component_) {
+    if (!_Component_) {
         Initialize();
     }
-    return component_;
+    return _Component_;
 }
 
 bool MainWindow::LoadLogFile(const std::string& file_path) {
     if (file_path.empty()) {
-        last_error_ = "File path is empty";
+        _Last_Error_ = "File path is empty";
         return false;
     }
     
     // Check if file exists
     if (!std::filesystem::exists(file_path)) {
-        last_error_ = "File does not exist: " + file_path;
+        _Last_Error_ = "File does not exist: " + file_path;
         return false;
     }
     
     // Stop existing file monitoring if running (for clean reload)
-    if (file_monitor_ && file_monitor_->IsMonitoring()) {
-        file_monitor_->StopMonitoring();
+    if (_File_Monitor_ && _File_Monitor_->IsMonitoring()) {
+        _File_Monitor_->StopMonitoring();
     }
     
     // Store the file path
-    current_file_path_ = file_path;
+    _Current_File_Path_ = file_path;
     
     try {
         // Use LogParser to load and parse the real file
-        auto load_result = log_parser_->LoadFile(file_path);
+        auto load_result = _Log_Parser_->LoadFile(file_path);
         if (load_result.IsError()) {
-            last_error_ = "Failed to load file: " + file_path + " - " + load_result.Get_error_message();
+            _Last_Error_ = "Failed to load file: " + file_path + " - " + load_result.Get_error_message();
             return false;
         }
         
         // Show loading message
-        last_error_ = "Loading and parsing log file...";
+        _Last_Error_ = "Loading and parsing log file...";
         
         // Parse the log entries
-        log_entries_ = log_parser_->ParseEntries();
+        log_entries_ = _Log_Parser_->ParseEntries();
         
         if (log_entries_.empty()) {
             // If no entries were parsed, create sample data as fallback
             CreateSampleLogEntries();
-            last_error_ = "No valid log entries found in file, using sample data";
+            _Last_Error_ = "No valid log entries found in file, using sample data";
         } else {
-            last_error_ = "Loaded " + std::to_string(log_entries_.size()) + " log entries from " + std::filesystem::path(file_path).filename().string();
+            _Last_Error_ = "Loaded " + std::to_string(log_entries_.size()) + " log entries from " + std::filesystem::path(file_path).filename().string();
         }
         
         // Don't create sample filters - start with empty filter area
@@ -852,31 +919,34 @@ bool MainWindow::LoadLogFile(const std::string& file_path) {
         scroll_offset_ = 0;
         selected_entry_index_ = 0;
         
+        // Reset visual selection mode on file reload
+        ExitVisualSelectionMode();
+        
         // Start FileMonitor to watch for changes (but don't enable tailing/auto-scroll)
         StartFileMonitoring();
         
         return true;
         
     } catch (const std::exception& e) {
-        last_error_ = "Error loading file: " + std::string(e.what());
+        _Last_Error_ = "Error loading file: " + std::string(e.what());
         return false;
     }
 }
 
 bool MainWindow::ReloadLogFile() {
-    if (current_file_path_.empty()) {
-        last_error_ = "No file currently loaded";
+    if (_Current_File_Path_.empty()) {
+        _Last_Error_ = "No file currently loaded";
         return false;
     }
     
-    return LoadLogFile(current_file_path_);
+    return LoadLogFile(_Current_File_Path_);
 }
 
-void MainWindow::SetMode(ApplicationMode mode) {
-    current_mode_ = mode;
+void MainWindow::SetMode(EApplicationMode mode) {
+    _Current_Mode_ = mode;
     
     // Update UI state based on mode
-    if (mode == ApplicationMode::FILE_BROWSER) {
+    if (mode == EApplicationMode::FileBrowser) {
         // Hide log viewer specific UI elements
         show_search_ = false;
         show_filter_panel_ = false;
@@ -884,16 +954,16 @@ void MainWindow::SetMode(ApplicationMode mode) {
         show_jump_dialog_ = false;
         
         // Focus the file browser if it exists
-        if (file_browser_) {
-            file_browser_->SetFocus(true);
+        if (_File_Browser_) {
+            _File_Browser_->SetFocus(true);
         }
-    } else if (mode == ApplicationMode::LOG_VIEWER) {
+    } else if (mode == EApplicationMode::LogViewer) {
         // Restore log viewer UI elements to default state
         show_detail_view_ = true;
         
         // Unfocus the file browser if it exists
-        if (file_browser_) {
-            file_browser_->SetFocus(false);
+        if (_File_Browser_) {
+            _File_Browser_->SetFocus(false);
         }
     }
     
@@ -904,25 +974,25 @@ void MainWindow::SetMode(ApplicationMode mode) {
 }
 
 void MainWindow::InitializeFileBrowser(const std::string& directory_path) {
-    initial_directory_ = directory_path;
+    _Initial_Directory_ = directory_path;
     
     // Create and initialize the file browser
-    file_browser_ = std::make_unique<FileBrowser>(directory_path);
-    file_browser_->Initialize();
+    _File_Browser_ = std::make_unique<FileBrowser>(directory_path);
+    _File_Browser_->Initialize();
     
     // Set up callbacks
-    file_browser_->SetFileSelectionCallback([this](const std::string& file_path) {
+    _File_Browser_->SetFileSelectionCallback([this](const std::string& file_path) {
         OnFileSelected(file_path);
     });
     
-    file_browser_->SetErrorCallback([this](const std::string& error) {
+    _File_Browser_->SetErrorCallback([this](const std::string& error) {
         SetLastError(error);
         if (refresh_callback_) {
             refresh_callback_();
         }
     });
     
-    file_browser_->SetStatusCallback([this](const std::string& status) {
+    _File_Browser_->SetStatusCallback([this](const std::string& status) {
         SetLastError(status);  // Use SetLastError for positive status messages too
         if (refresh_callback_) {
             refresh_callback_();
@@ -930,14 +1000,14 @@ void MainWindow::InitializeFileBrowser(const std::string& directory_path) {
     });
     
     // Switch to file browser mode
-    SetMode(ApplicationMode::FILE_BROWSER);
+    SetMode(EApplicationMode::FileBrowser);
 }
 
 void MainWindow::TransitionToLogViewer(const std::string& file_path) {
     // Load the log file
     if (LoadLogFile(file_path)) {
         // Switch to log viewer mode
-        SetMode(ApplicationMode::LOG_VIEWER);
+        SetMode(EApplicationMode::LogViewer);
         SetLastError("Loaded file: " + file_path);
     } else {
         // Stay in file browser mode and show error
@@ -964,8 +1034,8 @@ void MainWindow::EnterLogViewerMode(const std::string& file_path) {
 
 bool MainWindow::StartTailing() {
     // Check if file is loaded
-    if (current_file_path_.empty()) {
-        last_error_ = "No file loaded - cannot start tailing";
+    if (_Current_File_Path_.empty()) {
+        _Last_Error_ = "No file loaded - cannot start tailing";
         return false;
     }
     
@@ -974,15 +1044,15 @@ bool MainWindow::StartTailing() {
     auto_scroll_enabled_ = true;
     
     // Ensure FileMonitor is running (it should already be running from LoadLogFile)
-    if (!file_monitor_->IsMonitoring()) {
+    if (!_File_Monitor_->IsMonitoring()) {
         StartFileMonitoring();
     }
     
     // Configure faster polling for more responsive tailing (50ms instead of default 100ms)
-    file_monitor_->SetPollInterval(std::chrono::milliseconds(50));
+    _File_Monitor_->SetPollInterval(std::chrono::milliseconds(50));
     
     // Update UI status to show "LIVE" indicator
-    last_error_ = "LIVE - Tailing " + std::filesystem::path(current_file_path_).filename().string();
+    _Last_Error_ = "LIVE - Tailing " + std::filesystem::path(_Current_File_Path_).filename().string();
     
     return true;
 }
@@ -998,15 +1068,15 @@ void MainWindow::StopTailing() {
     auto_scroll_enabled_ = false;
     
     // Keep FileMonitor running but revert to slower polling for background monitoring
-    if (file_monitor_) {
-        file_monitor_->SetPollInterval(std::chrono::milliseconds(100));
+    if (_File_Monitor_) {
+        _File_Monitor_->SetPollInterval(std::chrono::milliseconds(100));
     }
     
     // Update UI status to show "STATIC" indicator
-    if (!current_file_path_.empty()) {
-        last_error_ = "STATIC - " + std::filesystem::path(current_file_path_).filename().string();
+    if (!_Current_File_Path_.empty()) {
+        _Last_Error_ = "STATIC - " + std::filesystem::path(_Current_File_Path_).filename().string();
     } else {
-        last_error_ = "STATIC - No file loaded";
+        _Last_Error_ = "STATIC - No file loaded";
     }
 }
 
@@ -1124,12 +1194,12 @@ bool MainWindow::RunAutotest(const std::string& log_file_path, const std::string
 
 void MainWindow::CloseCurrentFile() {
     // Clear all file-related state
-    current_file_path_.clear();
+    _Current_File_Path_.clear();
     log_entries_.clear();
     filtered_entries_.clear();
     selected_entry_index_ = 0;
     scroll_offset_ = 0;
-    last_error_.clear();
+    _Last_Error_.clear();
     
     // Stop any real-time monitoring and file monitoring
     StopRealTimeMonitoring();
@@ -1152,42 +1222,42 @@ void MainWindow::SetTerminalSize(int width, int height) {
 }
 
 void MainWindow::SetTailingPollInterval(int milliseconds) {
-    if (file_monitor_) {
-        file_monitor_->SetPollInterval(std::chrono::milliseconds(milliseconds));
+    if (_File_Monitor_) {
+        _File_Monitor_->SetPollInterval(std::chrono::milliseconds(milliseconds));
     }
 }
 
 void MainWindow::StartFileMonitoring() {
-    if (current_file_path_.empty() || !file_monitor_) {
+    if (_Current_File_Path_.empty() || !_File_Monitor_) {
         return;
     }
     
     // Only set up callback and start monitoring if not already running
-    if (!file_monitor_->IsMonitoring()) {
+    if (!_File_Monitor_->IsMonitoring()) {
         // Set up FileMonitor callback to OnNewLogLines
-        file_monitor_->SetCallback([this](const std::string& file_path, const std::vector<std::string>& new_lines) {
+        _File_Monitor_->SetCallback([this](const std::string& file_path, const std::vector<std::string>& new_lines) {
             OnNewLogLines(new_lines);
         });
         
         // Configure poll interval (default 100ms for background monitoring)
-        file_monitor_->SetPollInterval(std::chrono::milliseconds(100));
+        _File_Monitor_->SetPollInterval(std::chrono::milliseconds(100));
         
-        auto result = file_monitor_->StartMonitoring(current_file_path_);
+        auto result = _File_Monitor_->StartMonitoring(_Current_File_Path_);
         if (result.IsError()) {
-            last_error_ = "Failed to start file monitoring: " + result.Get_error_message();
+            _Last_Error_ = "Failed to start file monitoring: " + result.Get_error_message();
         }
     }
     // If already monitoring, don't change anything to avoid disrupting the state
 }
 
 void MainWindow::StopFileMonitoring() {
-    if (file_monitor_ && file_monitor_->IsMonitoring()) {
-        file_monitor_->StopMonitoring();
+    if (_File_Monitor_ && _File_Monitor_->IsMonitoring()) {
+        _File_Monitor_->StopMonitoring();
     }
 }
 
 void MainWindow::ApplyFiltersToNewEntries(const std::vector<LogEntry>& new_entries) {
-    if (!filter_engine_) {
+    if (!_Filter_Engine_) {
         // No filter engine - just append all new entries
         filtered_entries_.insert(filtered_entries_.end(), new_entries.begin(), new_entries.end());
         return;
@@ -1203,7 +1273,7 @@ void MainWindow::ApplyFiltersToNewEntries(const std::vector<LogEntry>& new_entri
         }
     } else {
         // Apply traditional filters to new entries only
-        const auto& filters = filter_engine_->Get_primary_filters();
+        const auto& filters = _Filter_Engine_->Get_primary_filters();
         
         // Check if there are any active filters
         bool has_active_filters = false;
@@ -1343,8 +1413,8 @@ ftxui::Element MainWindow::Render() {
 
 bool MainWindow::OnEvent(ftxui::Event event) {
     // Delegate to the component's event handler
-    if (component_) {
-        return component_->OnEvent(event);
+    if (_Component_) {
+        return _Component_->OnEvent(event);
     }
     return false;
 }
@@ -1454,7 +1524,7 @@ void MainWindow::AutoScrollToBottom() {
 
 void MainWindow::OnNewLogLines(const std::vector<std::string>& new_lines) {
     // Early return if no file loaded
-    if (current_file_path_.empty()) {
+    if (_Current_File_Path_.empty()) {
         return;
     }
     
@@ -1470,7 +1540,7 @@ void MainWindow::OnNewLogLines(const std::vector<std::string>& new_lines) {
         std::vector<LogEntry> new_entries;
         
         for (const auto& line : new_lines) {
-            auto entry = log_parser_->ParseSingleEntry(line, current_line_num);
+            auto entry = _Log_Parser_->ParseSingleEntry(line, current_line_num);
             // Add new entry to log_entries_ vector
             log_entries_.push_back(entry);
             new_entries.push_back(entry);
@@ -1495,17 +1565,17 @@ void MainWindow::OnNewLogLines(const std::vector<std::string>& new_lines) {
         
         // Update status message based on tailing state
         if (is_tailing_) {
-            last_error_ = "LIVE - Tailing " + std::filesystem::path(current_file_path_).filename().string();
+            _Last_Error_ = "LIVE - Tailing " + std::filesystem::path(_Current_File_Path_).filename().string();
         } else {
-            last_error_ = "STATIC - " + std::filesystem::path(current_file_path_).filename().string() + " (updated)";
+            _Last_Error_ = "STATIC - " + std::filesystem::path(_Current_File_Path_).filename().string() + " (updated)";
         }
         
     } catch (const std::exception& e) {
         // Handle parsing errors gracefully
         if (is_tailing_) {
-            last_error_ = "LIVE - Parse error: " + std::string(e.what());
+            _Last_Error_ = "LIVE - Parse error: " + std::string(e.what());
         } else {
-            last_error_ = "STATIC - Parse error: " + std::string(e.what());
+            _Last_Error_ = "STATIC - Parse error: " + std::string(e.what());
         }
     }
 }
@@ -1560,6 +1630,20 @@ ftxui::Element MainWindow::RenderLogTable() const {
         int start_idx = std::max(0, std::min(selected_entry_index_ - buffer, total_entries - visible_height - buffer));
         int end_idx = std::min(total_entries, start_idx + visible_height + buffer * 2);
         
+        // If in visual selection mode, ensure the entire selection is included in the render window
+        // (but only if the selection is reasonably sized to avoid performance issues)
+        if (visual_selection_mode_) {
+            auto range = GetVisualSelectionRange();
+            if (range.first >= 0 && range.second >= 0) {
+                int selection_size = range.second - range.first + 1;
+                // Only expand window if selection is reasonable size (less than 10x visible height)
+                if (selection_size <= visible_height * 10) {
+                    start_idx = std::min(start_idx, std::max(0, range.first - buffer / 2));
+                    end_idx = std::max(end_idx, std::min(total_entries, range.second + buffer / 2 + 1));
+                }
+            }
+        }
+        
         // Render entries in the window
         for (int i = start_idx; i < end_idx; ++i) {
             bool is_selected = (i == selected_entry_index_);
@@ -1576,7 +1660,7 @@ ftxui::Element MainWindow::RenderLogTable() const {
     }
     
     // Add visual focus indicator - main window has focus when filter panel doesn't
-    bool main_has_focus = !filter_panel_ || !filter_panel_->IsFocused();
+    bool main_has_focus = !_Filter_Panel_ || !_Filter_Panel_->IsFocused();
     
     // Create scrollable content that fills available space
     Element scrollable_content = vbox(rows) | yframe | yflex;
@@ -1609,44 +1693,69 @@ ftxui::Element MainWindow::RenderStatusBar() const {
     std::vector<Element> status_elements;
     
     // File info with visual polish
-    std::string file_info = current_file_path_.empty() ? "No file" : 
-                           std::filesystem::path(current_file_path_).filename().string();
+    std::string file_info = _Current_File_Path_.empty() ? "No file" : 
+                           std::filesystem::path(_Current_File_Path_).filename().string();
     Element file_element = text(file_info) | size(WIDTH, EQUAL, 25);
-    if (visual_theme_manager_->GetFontWeight("status")) {
+    if (_Visual_Theme_Manager_->GetFontWeight("status")) {
         file_element = file_element | bold;
     }
     status_elements.push_back(file_element);
     
     // Add separator with consistent styling
-    status_elements.push_back(text(" │ ") | color(visual_theme_manager_->GetBorderColor()));
+    status_elements.push_back(text(" │ ") | color(_Visual_Theme_Manager_->GetBorderColor()));
     
     // Monitoring status with appropriate colors
     std::string monitor_info = IsRealTimeMonitoringActive() ? "LIVE" : "STATIC";
     Element monitor_element = text(monitor_info) | size(WIDTH, EQUAL, 8);
     if (IsRealTimeMonitoringActive()) {
-        monitor_element = monitor_element | color(visual_theme_manager_->GetAccentColor()) | bold;
+        monitor_element = monitor_element | color(_Visual_Theme_Manager_->GetAccentColor()) | bold;
     } else {
-        monitor_element = monitor_element | color(visual_theme_manager_->GetMutedTextColor());
+        monitor_element = monitor_element | color(_Visual_Theme_Manager_->GetMutedTextColor());
     }
     status_elements.push_back(monitor_element);
     
     // Add separator
-    status_elements.push_back(text(" │ ") | color(visual_theme_manager_->GetBorderColor()));
+    status_elements.push_back(text(" │ ") | color(_Visual_Theme_Manager_->GetBorderColor()));
+    
+    // Visual selection mode indicator
+    if (visual_selection_mode_) {
+        int selection_size = GetVisualSelectionSize();
+        std::string visual_status = "VISUAL: " + std::to_string(selection_size) + 
+                                   (selection_size == 1 ? " line selected" : " lines selected");
+        
+        // For multi-screen selections, show range information
+        int visible_height = GetVisibleHeight();
+        if (selection_size > visible_height) {
+            auto range = GetVisualSelectionRange();
+            if (range.first >= 0 && range.second >= 0) {
+                visual_status += " (lines " + std::to_string(range.first + 1) + 
+                               "-" + std::to_string(range.second + 1) + ")";
+            }
+        }
+        
+        Element visual_element = text(visual_status) | 
+                                color(_Visual_Theme_Manager_->GetAccentColor()) | 
+                                bold;
+        status_elements.push_back(visual_element);
+        
+        // Add separator after visual mode indicator
+        status_elements.push_back(text(" │ ") | color(_Visual_Theme_Manager_->GetBorderColor()));
+    }
     
     // Error message or help (takes up middle space) with appropriate styling
-    std::string message = last_error_.empty() ? "Press ':' for goto, 'g' for top, 'f' for filters, 'q' to quit" : last_error_;
+    std::string message = _Last_Error_.empty() ? "Press ':' for goto, 'g' for top, 'f' for filters, 'q' to quit" : _Last_Error_;
     Element message_element = text(message) | flex;
-    if (!last_error_.empty()) {
+    if (!_Last_Error_.empty()) {
         // Error messages should be more prominent
-        message_element = message_element | color(visual_theme_manager_->GetLogLevelColor("Warning"));
+        message_element = message_element | color(_Visual_Theme_Manager_->GetLogLevelColor("Warning"));
     } else {
         // Help text should be muted
-        message_element = message_element | color(visual_theme_manager_->GetMutedTextColor());
+        message_element = message_element | color(_Visual_Theme_Manager_->GetMutedTextColor());
     }
     status_elements.push_back(message_element);
     
     // Add separator
-    status_elements.push_back(text(" │ ") | color(visual_theme_manager_->GetBorderColor()));
+    status_elements.push_back(text(" │ ") | color(_Visual_Theme_Manager_->GetBorderColor()));
     
     // Entry count and scroll info on the right with enhanced formatting
     std::string count_info;
@@ -1664,12 +1773,12 @@ ftxui::Element MainWindow::RenderStatusBar() const {
         }
         
         count_element = text(count_info);
-        if (visual_theme_manager_->GetFontWeight("status")) {
+        if (_Visual_Theme_Manager_->GetFontWeight("status")) {
             count_element = count_element | bold;
         }
     } else {
         count_info = "No entries";
-        count_element = text(count_info) | color(visual_theme_manager_->GetMutedTextColor());
+        count_element = text(count_info) | color(_Visual_Theme_Manager_->GetMutedTextColor());
     }
     status_elements.push_back(count_element);
     
@@ -1677,9 +1786,9 @@ ftxui::Element MainWindow::RenderStatusBar() const {
     Element status_bar = hbox(status_elements);
     
     // Use inverted colors for status bar with eye strain considerations
-    if (visual_theme_manager_->IsEyeStrainReductionEnabled()) {
-        status_bar = status_bar | bgcolor(visual_theme_manager_->GetBorderColor()) | 
-                     color(visual_theme_manager_->GetBackgroundColor());
+    if (_Visual_Theme_Manager_->IsEyeStrainReductionEnabled()) {
+        status_bar = status_bar | bgcolor(_Visual_Theme_Manager_->GetBorderColor()) | 
+                     color(_Visual_Theme_Manager_->GetBackgroundColor());
     } else {
         status_bar = status_bar | inverted;
     }
@@ -1703,7 +1812,7 @@ ftxui::Element MainWindow::RenderFilterPanel() const {
 ftxui::Element MainWindow::RenderDetailView() const {
     if (selected_entry_index_ < 0 || selected_entry_index_ >= static_cast<int>(filtered_entries_.size())) {
         Element no_selection = text("No entry selected") | center;
-        no_selection = no_selection | color(visual_theme_manager_->GetMutedTextColor());
+        no_selection = no_selection | color(_Visual_Theme_Manager_->GetMutedTextColor());
         
         const auto& selected_entry = filtered_entries_[selected_entry_index_];
 
@@ -1712,12 +1821,12 @@ ftxui::Element MainWindow::RenderDetailView() const {
                                 selected_entry.IsSemiStructured() ? "Semi-Structured" : "Unstructured";
         std::string title_text = "Detail View - Line " + std::to_string(selected_entry.Get_line_number()) + " (" + entry_type + ")";
         Element title = text(title_text);
-        if (visual_theme_manager_->GetFontWeight("header")) {
+        if (_Visual_Theme_Manager_->GetFontWeight("header")) {
             title = title | bold;
         }
         title = title | color(detail_view_focused_ ? 
-                             visual_theme_manager_->GetFocusColor() : 
-                             visual_theme_manager_->GetHighlightColor());
+                             _Visual_Theme_Manager_->GetFocusColor() : 
+                             _Visual_Theme_Manager_->GetHighlightColor());
         
         return window(title, no_selection);
     }
@@ -1736,12 +1845,12 @@ ftxui::Element MainWindow::RenderDetailView() const {
     //}
     
     Element title = text(title_text);
-    if (visual_theme_manager_->GetFontWeight("header")) {
+    if (_Visual_Theme_Manager_->GetFontWeight("header")) {
         title = title | bold;
     }
     title = title | color(detail_view_focused_ ? 
-                         visual_theme_manager_->GetFocusColor() : 
-                         visual_theme_manager_->GetHighlightColor());
+                         _Visual_Theme_Manager_->GetFocusColor() : 
+                         _Visual_Theme_Manager_->GetHighlightColor());
     
     // Use the full raw line instead of just the parsed message
     std::string full_message = selected_entry.Get_raw_line();
@@ -1777,9 +1886,9 @@ ftxui::Element MainWindow::RenderDetailView() const {
         // Apply log level styling to all lines
         if (selected_entry.Get_log_level().has_value()) {
             const std::string& level = selected_entry.Get_log_level().value();
-            if (visual_theme_manager_->IsLogLevelProminent(level)) {
-                line_element = line_element | color(visual_theme_manager_->GetLogLevelColor(level));
-                if (visual_theme_manager_->ShouldLogLevelUseBold(level)) {
+            if (_Visual_Theme_Manager_->IsLogLevelProminent(level)) {
+                line_element = line_element | color(_Visual_Theme_Manager_->GetLogLevelColor(level));
+                if (_Visual_Theme_Manager_->ShouldLogLevelUseBold(level)) {
                     line_element = line_element | bold;
                 }
             }
@@ -1792,12 +1901,12 @@ ftxui::Element MainWindow::RenderDetailView() const {
     if (start_line > 0) {
         content_elements.insert(content_elements.begin(), 
                                text("... (" + std::to_string(start_line) + " lines above)") | 
-                               color(visual_theme_manager_->GetMutedTextColor()));
+                               color(_Visual_Theme_Manager_->GetMutedTextColor()));
     }
     if (end_line < static_cast<int>(message_lines.size())) {
         content_elements.push_back(
             text("... (" + std::to_string(message_lines.size() - end_line) + " lines below)") | 
-            color(visual_theme_manager_->GetMutedTextColor()));
+            color(_Visual_Theme_Manager_->GetMutedTextColor()));
     }
     
     Element content = vbox(content_elements);
@@ -1805,7 +1914,7 @@ ftxui::Element MainWindow::RenderDetailView() const {
     // Add border styling with focus indication
     Element window_content = window(title, content);
     if (detail_view_focused_) {
-        window_content = window_content | border | color(visual_theme_manager_->GetFocusColor());
+        window_content = window_content | border | color(_Visual_Theme_Manager_->GetFocusColor());
     }
     
     return window_content;
@@ -1871,29 +1980,34 @@ ftxui::Element MainWindow::RenderHelpDialog() const {
 
 ftxui::Element MainWindow::RenderLogEntry(const LogEntry& entry, bool is_selected) const {
     // Use the LogEntryRenderer if available, otherwise fall back to basic rendering
-    if (log_entry_renderer_) {
+    if (_Log_Entry_Renderer_) {
         // Configure the renderer with current settings
-        log_entry_renderer_->SetWordWrapEnabled(word_wrap_enabled_);
-        log_entry_renderer_->SetShowLineNumbers(show_line_numbers_);
+        _Log_Entry_Renderer_->SetWordWrapEnabled(word_wrap_enabled_);
+        _Log_Entry_Renderer_->SetShowLineNumbers(show_line_numbers_);
         
-        // Calculate relative line number using RelativeLineNumberSystem
-        int relative_line_number = 0;
-        if (relative_line_system_) {
-            // Find the index of this entry in the filtered entries
-            int entry_index = -1;
-            for (int i = 0; i < static_cast<int>(filtered_entries_.size()); ++i) {
-                if (&filtered_entries_[i] == &entry) {
-                    entry_index = i;
-                    break;
-                }
-            }
-            
-            if (entry_index >= 0) {
-                relative_line_number = entry_index - selected_entry_index_;
+        // Find the index of this entry in the filtered entries (used for both relative line numbers and visual selection)
+        int entry_index = -1;
+        for (int i = 0; i < static_cast<int>(filtered_entries_.size()); ++i) {
+            if (&filtered_entries_[i] == &entry) {
+                entry_index = i;
+                break;
             }
         }
         
-        // Render using the new LogEntryRenderer with search highlighting
+        // Calculate relative line number using RelativeLineNumberSystem
+        int relative_line_number = 0;
+        if (_Relative_Line_System_ && entry_index >= 0) {
+            relative_line_number = entry_index - selected_entry_index_;
+        }
+        
+        // Check if this entry is within visual selection range
+        bool is_visual_selected = false;
+        if (visual_selection_mode_ && entry_index >= 0) {
+            auto range = GetVisualSelectionRange();
+            is_visual_selected = (entry_index >= range.first && entry_index <= range.second);
+        }
+        
+        // Render using the appropriate LogEntryRenderer method
         Element row;
         std::string highlight_term;
         
@@ -1904,13 +2018,16 @@ ftxui::Element MainWindow::RenderLogEntry(const LogEntry& entry, bool is_selecte
             highlight_term = GetFilterHighlightTerm();
         }
         
-        if (!highlight_term.empty()) {
+        // Use visual selection rendering if in visual selection mode
+        if (visual_selection_mode_) {
+            row = _Log_Entry_Renderer_->RenderLogEntryWithVisualSelection(entry, is_selected, is_visual_selected, relative_line_number);
+        } else if (!highlight_term.empty()) {
             // Use search highlighting if there's a term to highlight
             bool case_sensitive = HasUppercaseLetters(highlight_term);
             bool is_filter_highlight = search_query_.empty(); // If no active search, this is a filter highlight
-            row = log_entry_renderer_->RenderLogEntryWithSearchHighlight(entry, is_selected, relative_line_number, highlight_term, case_sensitive, is_filter_highlight);
+            row = _Log_Entry_Renderer_->RenderLogEntryWithSearchHighlight(entry, is_selected, relative_line_number, highlight_term, case_sensitive, is_filter_highlight);
         } else {
-            row = log_entry_renderer_->RenderLogEntry(entry, is_selected, relative_line_number);
+            row = _Log_Entry_Renderer_->RenderLogEntry(entry, is_selected, relative_line_number);
         }
         
         // Apply additional styling for context lines and search highlighting
@@ -2012,11 +2129,11 @@ ftxui::Element MainWindow::RenderLogEntry(const LogEntry& entry, bool is_selecte
 
 ftxui::Element MainWindow::RenderTableHeader() const {
     // Use the LogEntryRenderer if available, otherwise fall back to basic rendering
-    if (log_entry_renderer_) {
+    if (_Log_Entry_Renderer_) {
         // Configure the renderer with current settings
-        log_entry_renderer_->SetShowLineNumbers(show_line_numbers_);
+        _Log_Entry_Renderer_->SetShowLineNumbers(show_line_numbers_);
         
-        return log_entry_renderer_->RenderTableHeader();
+        return _Log_Entry_Renderer_->RenderTableHeader();
     }
     
     // Fallback to original header rendering if LogEntryRenderer is not available
@@ -2129,13 +2246,13 @@ void MainWindow::OnFiltersChanged() {
 }
 
 void MainWindow::ApplyTraditionalFilters() {
-    if (!filter_engine_) {
+    if (!_Filter_Engine_) {
         filtered_entries_ = log_entries_;
         return;
     }
     
     // Get all active filters from the filter engine
-    const auto& filters = filter_engine_->Get_primary_filters();
+    const auto& filters = _Filter_Engine_->Get_primary_filters();
     std::vector<LogEntry> matches;
     
     // If no active filters, show all entries
@@ -2188,7 +2305,7 @@ void MainWindow::ApplyTraditionalFilters() {
 }
 
 void MainWindow::OnFileMonitorError(const std::string& error) {
-    last_error_ = "File monitoring error: " + error;
+    _Last_Error_ = "File monitoring error: " + error;
 }
 
 void MainWindow::UpdateStatusBar() {
@@ -2204,7 +2321,7 @@ void MainWindow::ShowSearch() {
     search_result_index_ = -1;
     
     // Show search prompt in status bar
-    last_error_ = "Search: (type to search, Enter to confirm, + to promote to filter, Esc to cancel)";
+    _Last_Error_ = "Search: (type to search, Enter to confirm, + to promote to filter, Esc to cancel)";
 }
 
 void MainWindow::HideSearch() {
@@ -2213,7 +2330,7 @@ void MainWindow::HideSearch() {
     search_query_.clear();
     search_results_.clear();
     search_result_index_ = -1;
-    last_error_.clear(); // Clear status bar message
+    _Last_Error_.clear(); // Clear status bar message
 }
 
 void MainWindow::PerformSearch(const std::string& query) {
@@ -2326,7 +2443,7 @@ void MainWindow::ClearSearch() {
 // Search input handling implementations
 void MainWindow::AppendToSearch(const std::string& text) {
     search_query_ += text;
-    last_error_ = "Search: " + search_query_ + " (Enter to confirm, + to promote, Esc to cancel)";
+    _Last_Error_ = "Search: " + search_query_ + " (Enter to confirm, + to promote, Esc to cancel)";
     // Perform search for highlighting but don't jump to results while typing
     PerformSearchHighlightOnly(search_query_);
 }
@@ -2335,9 +2452,9 @@ void MainWindow::ConfirmSearch() {
     if (!search_query_.empty()) {
         PerformSearch(search_query_);
         if (!search_results_.empty()) {
-            last_error_ = "Found " + std::to_string(search_results_.size()) + " matches for '" + search_query_ + "'. Use n/N to navigate.";
+            _Last_Error_ = "Found " + std::to_string(search_results_.size()) + " matches for '" + search_query_ + "'. Use n/N to navigate.";
         } else {
-            last_error_ = "No matches found for '" + search_query_ + "'";
+            _Last_Error_ = "No matches found for '" + search_query_ + "'";
         }
     }
     // Exit input mode but keep search active for navigation
@@ -2348,11 +2465,11 @@ void MainWindow::BackspaceSearch() {
     if (!search_query_.empty()) {
         search_query_.pop_back();
         if (search_query_.empty()) {
-            last_error_ = "Search: (type to search, Enter to confirm, + to promote, Esc to cancel)";
+            _Last_Error_ = "Search: (type to search, Enter to confirm, + to promote, Esc to cancel)";
             search_results_.clear();
             search_result_index_ = -1;
         } else {
-            last_error_ = "Search: " + search_query_ + " (Enter to confirm, + to promote, Esc to cancel)";
+            _Last_Error_ = "Search: " + search_query_ + " (Enter to confirm, + to promote, Esc to cancel)";
             // Perform search for highlighting but don't jump to results while typing
             PerformSearchHighlightOnly(search_query_);
         }
@@ -2362,7 +2479,7 @@ void MainWindow::BackspaceSearch() {
 // In-line search functionality implementations
 void MainWindow::ShowInlineSearch() {
     if (selected_entry_index_ < 0 || selected_entry_index_ >= static_cast<int>(filtered_entries_.size())) {
-        last_error_ = "No line selected for in-line search";
+        _Last_Error_ = "No line selected for in-line search";
         return;
     }
     
@@ -2372,7 +2489,7 @@ void MainWindow::ShowInlineSearch() {
     inline_search_matches_.clear();
     current_inline_match_ = 0;
     
-    last_error_ = "In-line search: (type to search within current line, Enter to confirm, Esc to cancel)";
+    _Last_Error_ = "In-line search: (type to search within current line, Enter to confirm, Esc to cancel)";
 }
 
 void MainWindow::HideInlineSearch() {
@@ -2381,7 +2498,7 @@ void MainWindow::HideInlineSearch() {
     inline_search_query_.clear();
     inline_search_matches_.clear();
     current_inline_match_ = 0;
-    last_error_.clear();
+    _Last_Error_.clear();
 }
 
 void MainWindow::AppendToInlineSearch(const std::string& text) {
@@ -2389,9 +2506,9 @@ void MainWindow::AppendToInlineSearch(const std::string& text) {
     UpdateInlineSearchResults();
     
     if (inline_search_matches_.empty()) {
-        last_error_ = "In-line search: " + inline_search_query_ + " (no matches in current line)";
+        _Last_Error_ = "In-line search: " + inline_search_query_ + " (no matches in current line)";
     } else {
-        last_error_ = "In-line search: " + inline_search_query_ + " (" + 
+        _Last_Error_ = "In-line search: " + inline_search_query_ + " (" + 
                      std::to_string(inline_search_matches_.size()) + " matches in current line)";
     }
 }
@@ -2400,15 +2517,15 @@ void MainWindow::BackspaceInlineSearch() {
     if (!inline_search_query_.empty()) {
         inline_search_query_.pop_back();
         if (inline_search_query_.empty()) {
-            last_error_ = "In-line search: (type to search within current line, Enter to confirm, Esc to cancel)";
+            _Last_Error_ = "In-line search: (type to search within current line, Enter to confirm, Esc to cancel)";
             inline_search_matches_.clear();
             current_inline_match_ = 0;
         } else {
             UpdateInlineSearchResults();
             if (inline_search_matches_.empty()) {
-                last_error_ = "In-line search: " + inline_search_query_ + " (no matches in current line)";
+                _Last_Error_ = "In-line search: " + inline_search_query_ + " (no matches in current line)";
             } else {
-                last_error_ = "In-line search: " + inline_search_query_ + " (" + 
+                _Last_Error_ = "In-line search: " + inline_search_query_ + " (" + 
                              std::to_string(inline_search_matches_.size()) + " matches in current line)";
             }
         }
@@ -2425,10 +2542,10 @@ void MainWindow::ConfirmInlineSearch() {
     UpdateInlineSearchResults();
     
     if (inline_search_matches_.empty()) {
-        last_error_ = "No matches found in current line";
+        _Last_Error_ = "No matches found in current line";
     } else {
         current_inline_match_ = 0;
-        last_error_ = "Found " + std::to_string(inline_search_matches_.size()) + 
+        _Last_Error_ = "Found " + std::to_string(inline_search_matches_.size()) + 
                      " matches in current line. Press n/N to navigate, Esc to exit.";
     }
 }
@@ -2439,7 +2556,7 @@ void MainWindow::FindNextInlineMatch() {
     }
     
     current_inline_match_ = (current_inline_match_ + 1) % inline_search_matches_.size();
-    last_error_ = "In-line match " + std::to_string(current_inline_match_ + 1) + 
+    _Last_Error_ = "In-line match " + std::to_string(current_inline_match_ + 1) + 
                  " of " + std::to_string(inline_search_matches_.size()) + 
                  " (position " + std::to_string(inline_search_matches_[current_inline_match_]) + ")";
 }
@@ -2455,7 +2572,7 @@ void MainWindow::FindPreviousInlineMatch() {
         current_inline_match_--;
     }
     
-    last_error_ = "In-line match " + std::to_string(current_inline_match_ + 1) + 
+    _Last_Error_ = "In-line match " + std::to_string(current_inline_match_ + 1) + 
                  " of " + std::to_string(inline_search_matches_.size()) + 
                  " (position " + std::to_string(inline_search_matches_[current_inline_match_]) + ")";
 }
@@ -2497,7 +2614,7 @@ void MainWindow::ShowJumpDialog() {
     jump_input_.clear();
     
     // Provide immediate feedback
-    last_error_ = "Jump dialog activated. Enter line number or timestamp, then press Enter.";
+    _Last_Error_ = "Jump dialog activated. Enter line number or timestamp, then press Enter.";
 }
 
 void MainWindow::HideJumpDialog() {
@@ -2560,7 +2677,7 @@ void MainWindow::JumpToPercentage(int percentage) {
     target_index = std::min(target_index, static_cast<int>(filtered_entries_.size()) - 1);
     
     SelectEntry(target_index);
-    last_error_ = "Jumped to " + std::to_string(percentage) + "% (" + std::to_string(target_index + 1) + " of " + std::to_string(filtered_entries_.size()) + ")";
+    _Last_Error_ = "Jumped to " + std::to_string(percentage) + "% (" + std::to_string(target_index + 1) + " of " + std::to_string(filtered_entries_.size()) + ")";
 }
 
 void MainWindow::ToggleJumpMode() {
@@ -2569,13 +2686,13 @@ void MainWindow::ToggleJumpMode() {
 
 void MainWindow::AppendToJumpInput(const std::string& text) {
     jump_input_ += text;
-    last_error_ = "Jump to: " + jump_input_ + " (Enter to execute, Esc to cancel)";
+    _Last_Error_ = "Jump to: " + jump_input_ + " (Enter to execute, Esc to cancel)";
 }
 
 void MainWindow::BackspaceJumpInput() {
     if (!jump_input_.empty()) {
         jump_input_.pop_back();
-        last_error_ = jump_input_.empty() ? "Jump to: (Enter line number)" : "Jump to: " + jump_input_ + " (Enter to execute, Esc to cancel)";
+        _Last_Error_ = jump_input_.empty() ? "Jump to: (Enter line number)" : "Jump to: " + jump_input_ + " (Enter to execute, Esc to cancel)";
     }
 }
 
@@ -2588,9 +2705,9 @@ void MainWindow::ExecuteJump() {
     try {
         int line_number = std::stoi(jump_input_);
         JumpToLine(line_number);
-        last_error_ = "Jumped to line " + std::to_string(line_number);
+        _Last_Error_ = "Jumped to line " + std::to_string(line_number);
     } catch (const std::exception&) {
-        last_error_ = "Invalid line number: " + jump_input_;
+        _Last_Error_ = "Invalid line number: " + jump_input_;
     }
     
     HideJumpDialog();
@@ -2600,21 +2717,21 @@ void MainWindow::ToggleFilterPanel() {
     show_filter_panel_ = !show_filter_panel_;
     
     // Update filter panel visibility
-    if (filter_panel_) {
-        filter_panel_->SetVisible(show_filter_panel_);
+    if (_Filter_Panel_) {
+        _Filter_Panel_->SetVisible(show_filter_panel_);
     }
     
     // Provide feedback
-    last_error_ = show_filter_panel_ ? "Filter panel shown" : "Filter panel hidden";
+    _Last_Error_ = show_filter_panel_ ? "Filter panel shown" : "Filter panel hidden";
 }
 
 void MainWindow::ToggleWordWrap() {
     word_wrap_enabled_ = !word_wrap_enabled_;
     
     if (word_wrap_enabled_) {
-        last_error_ = "Word wrap enabled - long lines will wrap";
+        _Last_Error_ = "Word wrap enabled - long lines will wrap";
     } else {
-        last_error_ = "Word wrap disabled - long lines will be truncated";
+        _Last_Error_ = "Word wrap disabled - long lines will be truncated";
     }
 }
 
@@ -2622,9 +2739,9 @@ void MainWindow::ToggleDetailView() {
     show_detail_view_ = !show_detail_view_;
     
     if (show_detail_view_) {
-        last_error_ = "Detail view shown - full log entry displayed below";
+        _Last_Error_ = "Detail view shown - full log entry displayed below";
     } else {
-        last_error_ = "Detail view hidden - press 'd' to show";
+        _Last_Error_ = "Detail view hidden - press 'd' to show";
     }
 }
 
@@ -2633,7 +2750,7 @@ bool MainWindow::HandleVimStyleNavigation(const std::string& input) {
         return false;
     }
 
-    if (filter_panel_ && filter_panel_->IsFocused()) {
+    if (_Filter_Panel_ && _Filter_Panel_->IsFocused()) {
         return false; // Let filter panel handle j/k instead
     }
     
@@ -2643,7 +2760,7 @@ bool MainWindow::HandleVimStyleNavigation(const std::string& input) {
     if (std::isdigit(ch)) {
         vim_command_buffer_ += ch;
         vim_command_mode_ = true;
-        last_error_ = "Vim command: " + vim_command_buffer_ + " (press j/k to execute)";
+        _Last_Error_ = "Vim command: " + vim_command_buffer_ + " (press j/k to execute)";
         return true;
     }
     
@@ -2662,7 +2779,7 @@ bool MainWindow::HandleVimStyleNavigation(const std::string& input) {
         int jump_distance;
         char direction;
         
-        if (relative_line_system_->HandleNavigationInput(full_command, jump_distance, direction)) {
+        if (_Relative_Line_System_->HandleNavigationInput(full_command, jump_distance, direction)) {
             ExecuteVimNavigation(jump_distance, direction);
             ClearVimCommandBuffer();
             return true;
@@ -2691,11 +2808,11 @@ void MainWindow::ExecuteVimNavigation(int count, char direction) {
     if (direction == 'j') {
         // Move down
         ScrollDown(count);
-        last_error_ = "Moved down " + std::to_string(count) + " line" + (count > 1 ? "s" : "");
+        _Last_Error_ = "Moved down " + std::to_string(count) + " line" + (count > 1 ? "s" : "");
     } else if (direction == 'k') {
         // Move up
         ScrollUp(count);
-        last_error_ = "Moved up " + std::to_string(count) + " line" + (count > 1 ? "s" : "");
+        _Last_Error_ = "Moved up " + std::to_string(count) + " line" + (count > 1 ? "s" : "");
     }
 }
 
@@ -2709,9 +2826,9 @@ void MainWindow::BackspaceVimCommand() {
         vim_command_buffer_.pop_back();
         if (vim_command_buffer_.empty()) {
             vim_command_mode_ = false;
-            last_error_ = "Vim command cleared";
+            _Last_Error_ = "Vim command cleared";
         } else {
-            last_error_ = "Vim command: " + vim_command_buffer_ + " (press j/k to execute)";
+            _Last_Error_ = "Vim command: " + vim_command_buffer_ + " (press j/k to execute)";
         }
     }
 }
@@ -2854,7 +2971,7 @@ void MainWindow::CreateSampleLogEntries() {
 
 void MainWindow::CreateSampleFilters() {
     // Create some sample filters for testing navigation
-    if (!filter_engine_) {
+    if (!_Filter_Engine_) {
         return;
     }
     
@@ -2869,25 +2986,25 @@ void MainWindow::CreateSampleFilters() {
     init_filter->Request_is_active(false);
     
     // Add filters to the engine
-    filter_engine_->AddFilter(std::move(error_filter));
-    filter_engine_->AddFilter(std::move(warning_filter));
-    filter_engine_->AddFilter(std::move(init_filter));
+    _Filter_Engine_->AddFilter(std::move(error_filter));
+    _Filter_Engine_->AddFilter(std::move(warning_filter));
+    _Filter_Engine_->AddFilter(std::move(init_filter));
     
     // Refresh the filter panel to show the new filters
-    if (filter_panel_) {
-        filter_panel_->RefreshFilters();
+    if (_Filter_Panel_) {
+        _Filter_Panel_->RefreshFilters();
     }
 }
 
 // Enhanced search functionality implementations
 void MainWindow::PromoteSearchToFilter() {
     if (search_query_.empty()) {
-        last_error_ = "No active search to promote";
+        _Last_Error_ = "No active search to promote";
         return;
     }
     
     show_search_promotion_ = true;
-    last_error_ = "Promote search '" + search_query_ + "' to filter: [1] Timestamp after [2] Frame after [3] Logger contains [4] Level equals [5] Message contains";
+    _Last_Error_ = "Promote search '" + search_query_ + "' to filter: [1] Timestamp after [2] Frame after [3] Logger contains [4] Level equals [5] Message contains";
 }
 
 void MainWindow::ShowSearchPromotionDialog() {
@@ -2900,7 +3017,7 @@ void MainWindow::HideSearchPromotionDialog() {
 
 void MainWindow::CreateFilterFromSearch(FilterConditionType type) {
     if (search_query_.empty()) {
-        last_error_ = "No search query to promote";
+        _Last_Error_ = "No search query to promote";
         show_search_promotion_ = false;
         return;
     }
@@ -2916,22 +3033,22 @@ void MainWindow::CreateFilterFromSearch(FilterConditionType type) {
     switch (type) {
         case FilterConditionType::MessageContains:
             condition = FilterConditionFactory::CreateMessageContains(search_query_);
-            last_error_ = "Added filter: Message contains '" + search_query_ + "'";
+            _Last_Error_ = "Added filter: Message contains '" + search_query_ + "'";
             break;
         case FilterConditionType::LogLevelEquals:
             condition = FilterConditionFactory::CreateLogLevelEquals(search_query_);
-            last_error_ = "Added filter: LogLevel = '" + search_query_ + "'";
+            _Last_Error_ = "Added filter: LogLevel = '" + search_query_ + "'";
             break;
         case FilterConditionType::LoggerContains:
             condition = std::make_unique<FilterCondition>(FilterConditionType::LoggerContains, search_query_);
-            last_error_ = "Added filter: Logger contains '" + search_query_ + "'";
+            _Last_Error_ = "Added filter: Logger contains '" + search_query_ + "'";
             break;
         case FilterConditionType::AnyFieldContains:
             condition = FilterConditionFactory::CreateAnyFieldContains(search_query_);
-            last_error_ = "Added filter: Any field contains '" + search_query_ + "'";
+            _Last_Error_ = "Added filter: Any field contains '" + search_query_ + "'";
             break;
         default:
-            last_error_ = "Unknown filter type";
+            _Last_Error_ = "Unknown filter type";
             break;
     }
     
@@ -2940,8 +3057,8 @@ void MainWindow::CreateFilterFromSearch(FilterConditionType type) {
         ApplyCurrentFilter();
         
         // Update filter panel to show the new filter
-        if (filter_panel_) {
-            filter_panel_->SetCurrentFilterExpression(current_filter_expression_.get());
+        if (_Filter_Panel_) {
+            _Filter_Panel_->SetCurrentFilterExpression(current_filter_expression_.get());
         }
     }
     
@@ -2954,7 +3071,7 @@ void MainWindow::CreateFilterFromSearch(FilterConditionType type) {
 // Contextual filtering implementations
 void MainWindow::ShowContextualFilterDialog() {
     if (selected_entry_index_ < 0 || selected_entry_index_ >= static_cast<int>(filtered_entries_.size())) {
-        last_error_ = "No log entry selected for contextual filtering";
+        _Last_Error_ = "No log entry selected for contextual filtering";
         return;
     }
     
@@ -2972,7 +3089,7 @@ void MainWindow::ShowContextualFilterDialog() {
     if (entry.Get_frame_number().has_value()) {
         options += " [4] After frame";
     }
-    last_error_ = options;
+    _Last_Error_ = options;
 }
 
 void MainWindow::CreateContextualFilter(FilterConditionType type) {
@@ -2994,23 +3111,23 @@ void MainWindow::CreateContextualFilter(FilterConditionType type) {
         case FilterConditionType::TimestampAfter:
             if (entry.Get_timestamp().has_value()) {
                 condition = FilterConditionFactory::CreateTimestampAfter(entry.Get_timestamp().value());
-                last_error_ = "Added filter: Timestamp >= " + entry.Get_timestamp().value();
+                _Last_Error_ = "Added filter: Timestamp >= " + entry.Get_timestamp().value();
             }
             break;
         case FilterConditionType::LoggerEquals:
             condition = FilterConditionFactory::CreateLoggerEquals(entry.Get_logger_name());
-            last_error_ = "Added filter: Logger = " + entry.Get_logger_name();
+            _Last_Error_ = "Added filter: Logger = " + entry.Get_logger_name();
             break;
         case FilterConditionType::LogLevelEquals:
             if (entry.Get_log_level().has_value()) {
                 condition = FilterConditionFactory::CreateLogLevelEquals(entry.Get_log_level().value());
-                last_error_ = "Added filter: LogLevel = " + entry.Get_log_level().value();
+                _Last_Error_ = "Added filter: LogLevel = " + entry.Get_log_level().value();
             }
             break;
         case FilterConditionType::FrameAfter:
             if (entry.Get_frame_number().has_value()) {
                 condition = FilterConditionFactory::CreateFrameAfter(entry.Get_frame_number().value());
-                last_error_ = "Added filter: Frame >= " + std::to_string(entry.Get_frame_number().value());
+                _Last_Error_ = "Added filter: Frame >= " + std::to_string(entry.Get_frame_number().value());
             }
             break;
         default:
@@ -3028,7 +3145,7 @@ void MainWindow::CreateContextualFilter(FilterConditionType type) {
 void MainWindow::HideContextualFilterDialog() {
     show_contextual_filter_dialog_ = false;
     contextual_conditions_.clear();
-    last_error_ = "Contextual filter dialog closed";
+    _Last_Error_ = "Contextual filter dialog closed";
 }
 
 // Context lines functionality implementations
@@ -3040,7 +3157,7 @@ void MainWindow::IncreaseContext() {
         else if (context_lines_ == 5) context_lines_ = 10;
         
         OnFiltersChanged();
-        last_error_ = "Context lines: ±" + std::to_string(context_lines_);
+        _Last_Error_ = "Context lines: ±" + std::to_string(context_lines_);
     }
 }
 
@@ -3051,20 +3168,20 @@ void MainWindow::DecreaseContext() {
         else if (context_lines_ <= 3) context_lines_--;
         
         OnFiltersChanged();
-        last_error_ = context_lines_ == 0 ? "Context lines: None" : "Context lines: ±" + std::to_string(context_lines_);
+        _Last_Error_ = context_lines_ == 0 ? "Context lines: None" : "Context lines: ±" + std::to_string(context_lines_);
     }
 }
 
 void MainWindow::SetContextLines(int lines) {
     context_lines_ = std::max(0, std::min(10, lines));
     OnFiltersChanged();
-    last_error_ = context_lines_ == 0 ? "Context lines: None" : "Context lines: ±" + std::to_string(context_lines_);
+    _Last_Error_ = context_lines_ == 0 ? "Context lines: None" : "Context lines: ±" + std::to_string(context_lines_);
 }
 
 void MainWindow::ClearContext() {
     context_lines_ = 0;
     OnFiltersChanged();
-    last_error_ = "Context lines cleared";
+    _Last_Error_ = "Context lines cleared";
 }
 
 // Helper methods
@@ -3253,17 +3370,17 @@ void MainWindow::BuildContextEntries(const std::vector<LogEntry>& matches) {
 void MainWindow::ShowQuickFilterDialog() {
     show_quick_filter_dialog_ = true;
     // Show quick filter options in status bar
-    last_error_ = "Quick filters: [e] Errors, [w] Warnings, [i] Info, [d] Debug, [c] Clear filters (Esc to cancel)";
+    _Last_Error_ = "Quick filters: [e] Errors, [w] Warnings, [i] Info, [d] Debug, [c] Clear filters (Esc to cancel)";
 }
 
 void MainWindow::HideQuickFilterDialog() {
     show_quick_filter_dialog_ = false;
-    last_error_.clear();
+    _Last_Error_.clear();
 }
 
 void MainWindow::ApplyQuickFilter(const std::string& filter_type) {
-    if (!filter_engine_) {
-        last_error_ = "Filter engine not available";
+    if (!_Filter_Engine_) {
+        _Last_Error_ = "Filter engine not available";
         HideQuickFilterDialog();
         return;
     }
@@ -3271,23 +3388,23 @@ void MainWindow::ApplyQuickFilter(const std::string& filter_type) {
     if (filter_type == "clear") {
         // Clear all filters by creating an empty filter expression
         current_filter_expression_ = std::make_unique<FilterExpression>(FilterOperator::And);
-        last_error_ = "All filters cleared";
+        _Last_Error_ = "All filters cleared";
     } else {
         // Create a quick filter
         std::unique_ptr<FilterCondition> condition;
         
         if (filter_type == "error") {
             condition = std::make_unique<FilterCondition>(FilterConditionType::LogLevelEquals, "Error");
-            last_error_ = "Quick filter applied: Showing only Error entries";
+            _Last_Error_ = "Quick filter applied: Showing only Error entries";
         } else if (filter_type == "warning") {
             condition = std::make_unique<FilterCondition>(FilterConditionType::LogLevelEquals, "Warning");
-            last_error_ = "Quick filter applied: Showing only Warning entries";
+            _Last_Error_ = "Quick filter applied: Showing only Warning entries";
         } else if (filter_type == "info") {
             condition = std::make_unique<FilterCondition>(FilterConditionType::LogLevelEquals, "Info");
-            last_error_ = "Quick filter applied: Showing only Info entries";
+            _Last_Error_ = "Quick filter applied: Showing only Info entries";
         } else if (filter_type == "debug") {
             condition = std::make_unique<FilterCondition>(FilterConditionType::LogLevelEquals, "Debug");
-            last_error_ = "Quick filter applied: Showing only Debug entries";
+            _Last_Error_ = "Quick filter applied: Showing only Debug entries";
         }
         
         // Create a new filter expression with this condition
@@ -3303,7 +3420,7 @@ void MainWindow::ApplyQuickFilter(const std::string& filter_type) {
 // Pattern-based navigation implementations
 void MainWindow::JumpToNextError() {
     if (filtered_entries_.empty()) {
-        last_error_ = "No entries to search";
+        _Last_Error_ = "No entries to search";
         return;
     }
     
@@ -3314,7 +3431,7 @@ void MainWindow::JumpToNextError() {
         const auto& entry = filtered_entries_[i];
         if (entry.Get_log_level().has_value() && entry.Get_log_level().value() == "Error") {
             SelectEntry(i);
-            last_error_ = "Jumped to next error at line " + std::to_string(i + 1);
+            _Last_Error_ = "Jumped to next error at line " + std::to_string(i + 1);
             return;
         }
     }
@@ -3324,17 +3441,17 @@ void MainWindow::JumpToNextError() {
         const auto& entry = filtered_entries_[i];
         if (entry.Get_log_level().has_value() && entry.Get_log_level().value() == "Error") {
             SelectEntry(i);
-            last_error_ = "Wrapped to first error at line " + std::to_string(i + 1);
+            _Last_Error_ = "Wrapped to first error at line " + std::to_string(i + 1);
             return;
         }
     }
     
-    last_error_ = "No error entries found";
+    _Last_Error_ = "No error entries found";
 }
 
 void MainWindow::JumpToPreviousError() {
     if (filtered_entries_.empty()) {
-        last_error_ = "No entries to search";
+        _Last_Error_ = "No entries to search";
         return;
     }
     
@@ -3345,7 +3462,7 @@ void MainWindow::JumpToPreviousError() {
         const auto& entry = filtered_entries_[i];
         if (entry.Get_log_level().has_value() && entry.Get_log_level().value() == "Error") {
             SelectEntry(i);
-            last_error_ = "Jumped to previous error at line " + std::to_string(i + 1);
+            _Last_Error_ = "Jumped to previous error at line " + std::to_string(i + 1);
             return;
         }
     }
@@ -3355,17 +3472,17 @@ void MainWindow::JumpToPreviousError() {
         const auto& entry = filtered_entries_[i];
         if (entry.Get_log_level().has_value() && entry.Get_log_level().value() == "Error") {
             SelectEntry(i);
-            last_error_ = "Wrapped to last error at line " + std::to_string(i + 1);
+            _Last_Error_ = "Wrapped to last error at line " + std::to_string(i + 1);
             return;
         }
     }
     
-    last_error_ = "No error entries found";
+    _Last_Error_ = "No error entries found";
 }
 
 void MainWindow::JumpToNextWarning() {
     if (filtered_entries_.empty()) {
-        last_error_ = "No entries to search";
+        _Last_Error_ = "No entries to search";
         return;
     }
     
@@ -3376,7 +3493,7 @@ void MainWindow::JumpToNextWarning() {
         const auto& entry = filtered_entries_[i];
         if (entry.Get_log_level().has_value() && entry.Get_log_level().value() == "Warning") {
             SelectEntry(i);
-            last_error_ = "Jumped to next warning at line " + std::to_string(i + 1);
+            _Last_Error_ = "Jumped to next warning at line " + std::to_string(i + 1);
             return;
         }
     }
@@ -3386,17 +3503,17 @@ void MainWindow::JumpToNextWarning() {
         const auto& entry = filtered_entries_[i];
         if (entry.Get_log_level().has_value() && entry.Get_log_level().value() == "Warning") {
             SelectEntry(i);
-            last_error_ = "Wrapped to first warning at line " + std::to_string(i + 1);
+            _Last_Error_ = "Wrapped to first warning at line " + std::to_string(i + 1);
             return;
         }
     }
     
-    last_error_ = "No warning entries found";
+    _Last_Error_ = "No warning entries found";
 }
 
 void MainWindow::JumpToPreviousWarning() {
     if (filtered_entries_.empty()) {
-        last_error_ = "No entries to search";
+        _Last_Error_ = "No entries to search";
         return;
     }
     
@@ -3407,7 +3524,7 @@ void MainWindow::JumpToPreviousWarning() {
         const auto& entry = filtered_entries_[i];
         if (entry.Get_log_level().has_value() && entry.Get_log_level().value() == "Warning") {
             SelectEntry(i);
-            last_error_ = "Jumped to previous warning at line " + std::to_string(i + 1);
+            _Last_Error_ = "Jumped to previous warning at line " + std::to_string(i + 1);
             return;
         }
     }
@@ -3417,24 +3534,24 @@ void MainWindow::JumpToPreviousWarning() {
         const auto& entry = filtered_entries_[i];
         if (entry.Get_log_level().has_value() && entry.Get_log_level().value() == "Warning") {
             SelectEntry(i);
-            last_error_ = "Wrapped to last warning at line " + std::to_string(i + 1);
+            _Last_Error_ = "Wrapped to last warning at line " + std::to_string(i + 1);
             return;
         }
     }
     
-    last_error_ = "No warning entries found";
+    _Last_Error_ = "No warning entries found";
 }
 
 void MainWindow::CreateLineNumberFilter(const LogEntry& entry) {
     // Line number filters don't make much sense, so we'll create a "from this line onward" filter
     // This is more of a navigation aid than a true filter
     size_t line_num = entry.Get_line_number();
-    last_error_ = "Line number filter not implemented - use navigation instead (line " + std::to_string(line_num) + ")";
+    _Last_Error_ = "Line number filter not implemented - use navigation instead (line " + std::to_string(line_num) + ")";
 }
 
 void MainWindow::CreateTimestampAfterFilter(const LogEntry& entry) {
     if (!entry.HasTimestamp()) {
-        last_error_ = "Selected entry has no timestamp value";
+        _Last_Error_ = "Selected entry has no timestamp value";
         return;
     }
     
@@ -3446,9 +3563,9 @@ void MainWindow::CreateTimestampAfterFilter(const LogEntry& entry) {
     auto filter = std::make_unique<Filter>(filter_name, FilterType::TextContains, timestamp);
     
     // Add the filter to the filter engine
-    auto result = filter_engine_->AddFilter(std::move(filter));
+    auto result = _Filter_Engine_->AddFilter(std::move(filter));
     if (result.IsError()) {
-        last_error_ = "Failed to create timestamp filter: " + result.Get_error_message();
+        _Last_Error_ = "Failed to create timestamp filter: " + result.Get_error_message();
         return;
     }
     
@@ -3456,19 +3573,19 @@ void MainWindow::CreateTimestampAfterFilter(const LogEntry& entry) {
     // std::cout << "Filter added. Total filters: " << filter_engine_->GetFilterCount() << std::endl;
     
     // Refresh the filter panel to show the new filter
-    if (filter_panel_) {
-        filter_panel_->RefreshFilters();
+    if (_Filter_Panel_) {
+        _Filter_Panel_->RefreshFilters();
     }
     
     // Apply filters to update the display
     OnFiltersChanged();
     
-    last_error_ = "Created timestamp filter: " + timestamp;
+    _Last_Error_ = "Created timestamp filter: " + timestamp;
 }
 
 void MainWindow::CreateFrameAfterFilter(const LogEntry& entry) {
     if (!entry.HasFrameNumber()) {
-        last_error_ = "Selected entry has no frame number value";
+        _Last_Error_ = "Selected entry has no frame number value";
         return;
     }
     
@@ -3479,27 +3596,27 @@ void MainWindow::CreateFrameAfterFilter(const LogEntry& entry) {
     auto filter = std::make_unique<Filter>(filter_name, FilterType::TextContains, std::to_string(frame));
     
     // Add the filter to the filter engine
-    auto result = filter_engine_->AddFilter(std::move(filter));
+    auto result = _Filter_Engine_->AddFilter(std::move(filter));
     if (result.IsError()) {
-        last_error_ = "Failed to create frame filter: " + result.Get_error_message();
+        _Last_Error_ = "Failed to create frame filter: " + result.Get_error_message();
         return;
     }
     
     // Refresh the filter panel to show the new filter
-    if (filter_panel_) {
-        filter_panel_->RefreshFilters();
+    if (_Filter_Panel_) {
+        _Filter_Panel_->RefreshFilters();
     }
     
     // Apply filters to update the display
     OnFiltersChanged();
     
-    last_error_ = "Created frame filter: " + std::to_string(frame);
+    _Last_Error_ = "Created frame filter: " + std::to_string(frame);
 }
 
 void MainWindow::CreateLoggerEqualsFilter(const LogEntry& entry) {
     std::string logger = entry.Get_logger_name();
     if (logger.empty()) {
-        last_error_ = "Selected entry has no logger name";
+        _Last_Error_ = "Selected entry has no logger name";
         return;
     }
     
@@ -3508,26 +3625,26 @@ void MainWindow::CreateLoggerEqualsFilter(const LogEntry& entry) {
     auto filter = std::make_unique<Filter>(filter_name, FilterType::LoggerName, logger);
     
     // Add the filter to the filter engine
-    auto result = filter_engine_->AddFilter(std::move(filter));
+    auto result = _Filter_Engine_->AddFilter(std::move(filter));
     if (result.IsError()) {
-        last_error_ = "Failed to create logger filter: " + result.Get_error_message();
+        _Last_Error_ = "Failed to create logger filter: " + result.Get_error_message();
         return;
     }
     
     // Refresh the filter panel to show the new filter
-    if (filter_panel_) {
-        filter_panel_->RefreshFilters();
+    if (_Filter_Panel_) {
+        _Filter_Panel_->RefreshFilters();
     }
     
     // Apply filters to update the display
     OnFiltersChanged();
     
-    last_error_ = "Created logger filter: " + logger;
+    _Last_Error_ = "Created logger filter: " + logger;
 }
 
 void MainWindow::CreateLevelEqualsFilter(const LogEntry& entry) {
     if (!entry.HasLogLevel()) {
-        last_error_ = "Selected entry has no log level value";
+        _Last_Error_ = "Selected entry has no log level value";
         return;
     }
     
@@ -3538,27 +3655,27 @@ void MainWindow::CreateLevelEqualsFilter(const LogEntry& entry) {
     auto filter = std::make_unique<Filter>(filter_name, FilterType::LogLevel, level);
     
     // Add the filter to the filter engine
-    auto result = filter_engine_->AddFilter(std::move(filter));
+    auto result = _Filter_Engine_->AddFilter(std::move(filter));
     if (result.IsError()) {
-        last_error_ = "Failed to create level filter: " + result.Get_error_message();
+        _Last_Error_ = "Failed to create level filter: " + result.Get_error_message();
         return;
     }
     
     // Refresh the filter panel to show the new filter
-    if (filter_panel_) {
-        filter_panel_->RefreshFilters();
+    if (_Filter_Panel_) {
+        _Filter_Panel_->RefreshFilters();
     }
     
     // Apply filters to update the display
     OnFiltersChanged();
     
-    last_error_ = "Created level filter: " + level;
+    _Last_Error_ = "Created level filter: " + level;
 }
 
 void MainWindow::CreateMessageContainsFilter(const LogEntry& entry) {
     std::string message = entry.Get_message();
     if (message.empty()) {
-        last_error_ = "Selected entry has no message content";
+        _Last_Error_ = "Selected entry has no message content";
         return;
     }
     
@@ -3576,21 +3693,21 @@ void MainWindow::CreateMessageContainsFilter(const LogEntry& entry) {
     auto filter = std::make_unique<Filter>(filter_name, FilterType::TextContains, filter_text);
     
     // Add the filter to the filter engine
-    auto result = filter_engine_->AddFilter(std::move(filter));
+    auto result = _Filter_Engine_->AddFilter(std::move(filter));
     if (result.IsError()) {
-        last_error_ = "Failed to create message filter: " + result.Get_error_message();
+        _Last_Error_ = "Failed to create message filter: " + result.Get_error_message();
         return;
     }
     
     // Refresh the filter panel to show the new filter
-    if (filter_panel_) {
-        filter_panel_->RefreshFilters();
+    if (_Filter_Panel_) {
+        _Filter_Panel_->RefreshFilters();
     }
     
     // Apply filters to update the display
     OnFiltersChanged();
     
-    last_error_ = "Created message filter: \"" + filter_text + "\"";
+    _Last_Error_ = "Created message filter: \"" + filter_text + "\"";
 }
 
 void MainWindow::PromoteSearchToColumnFilter(int column_number) {
@@ -3598,7 +3715,7 @@ void MainWindow::PromoteSearchToColumnFilter(int column_number) {
     std::cout << "Search active: " << IsSearchActive() << ", Query: '" << search_query_ << "'" << std::endl;
     
     if (!IsSearchActive() || search_query_.empty()) {
-        last_error_ = "No active search to promote to filter (query: '" + search_query_ + "')";
+        _Last_Error_ = "No active search to promote to filter (query: '" + search_query_ + "')";
         return;
     }
     
@@ -3632,7 +3749,7 @@ void MainWindow::PromoteSearchToColumnFilter(int column_number) {
             filter_description = "Message contains";
             break;
         default:
-            last_error_ = "Invalid search promotion option: " + std::to_string(column_number + 1);
+            _Last_Error_ = "Invalid search promotion option: " + std::to_string(column_number + 1);
             return;
     }
     
@@ -3642,13 +3759,13 @@ void MainWindow::PromoteSearchToColumnFilter(int column_number) {
     // Clear the search since it's now been promoted to a filter
     HideSearch();
     
-    last_error_ = "Created filter: " + filter_description + " \"" + current_search_query + "\"";
+    _Last_Error_ = "Created filter: " + filter_description + " \"" + current_search_query + "\"";
 }
 
 void MainWindow::CreateDirectColumnFilter(int column_number) {
     // Check if we have a selected entry
     if (selected_entry_index_ < 0 || selected_entry_index_ >= static_cast<int>(filtered_entries_.size())) {
-        last_error_ = "No entry selected for column filter";
+        _Last_Error_ = "No entry selected for column filter";
         return;
     }
     
@@ -3679,14 +3796,14 @@ void MainWindow::CreateDirectColumnFilter(int column_number) {
             CreateMessageContainsFilter(selected_entry);
             break;
         default:
-            last_error_ = "Invalid column number: " + std::to_string(column_number + 1);
+            _Last_Error_ = "Invalid column number: " + std::to_string(column_number + 1);
             break;
     }
 }
 
 void MainWindow::CreateFilterFromSearchAndColumn(FilterConditionType type, const std::string& search_term) {
     if (search_term.empty()) {
-        last_error_ = "Cannot create filter with empty search term";
+        _Last_Error_ = "Cannot create filter with empty search term";
         return;
     }
     
@@ -3717,7 +3834,7 @@ void MainWindow::CreateFilterFromSearchAndColumn(FilterConditionType type, const
             type_description = "Level equals";
             break;
         default:
-            last_error_ = "Unknown filter type";
+            _Last_Error_ = "Unknown filter type";
             return;
     }
     
@@ -3725,21 +3842,21 @@ void MainWindow::CreateFilterFromSearchAndColumn(FilterConditionType type, const
     auto filter = std::make_unique<Filter>(filter_name, filter_type_enum, search_term);
     
     // Add the filter to the filter engine
-    auto result = filter_engine_->AddFilter(std::move(filter));
+    auto result = _Filter_Engine_->AddFilter(std::move(filter));
     if (result.IsError()) {
-        last_error_ = "Failed to create filter: " + result.Get_error_message();
+        _Last_Error_ = "Failed to create filter: " + result.Get_error_message();
         return;
     }
     
     // Refresh the filter panel to show the new filter
-    if (filter_panel_) {
-        filter_panel_->RefreshFilters();
+    if (_Filter_Panel_) {
+        _Filter_Panel_->RefreshFilters();
     }
     
     // Apply filters to update the display
     OnFiltersChanged();
     
-    last_error_ = "Filter created: " + type_description + " \"" + search_term + "\"";
+    _Last_Error_ = "Filter created: " + type_description + " \"" + search_term + "\"";
 }
 
 // Detail view focus and navigation methods
@@ -3869,7 +3986,7 @@ bool MainWindow::ShouldStopTailing(const ftxui::Event& event) const {
 void MainWindow::CreateDirectColumnExcludeFilter(int column_number) {
     // Check if we have a selected entry
     if (selected_entry_index_ < 0 || selected_entry_index_ >= static_cast<int>(filtered_entries_.size())) {
-        last_error_ = "No entry selected for column exclude filter";
+        _Last_Error_ = "No entry selected for column exclude filter";
         return;
     }
     
@@ -3887,7 +4004,7 @@ void MainWindow::CreateDirectColumnExcludeFilter(int column_number) {
                 filter_type_enum = FilterType::TimeRange; // Use TimeRange for timestamp filtering
                 filter_value = selected_entry.Get_timestamp().value();
             } else {
-                last_error_ = "Selected entry has no timestamp";
+                _Last_Error_ = "Selected entry has no timestamp";
                 return;
             }
             break;
@@ -3897,7 +4014,7 @@ void MainWindow::CreateDirectColumnExcludeFilter(int column_number) {
                 filter_type_enum = FilterType::FrameRange; // Use FrameRange for frame filtering
                 filter_value = std::to_string(selected_entry.Get_frame_number().value());
             } else {
-                last_error_ = "Selected entry has no frame number";
+                _Last_Error_ = "Selected entry has no frame number";
                 return;
             }
             break;
@@ -3912,7 +4029,7 @@ void MainWindow::CreateDirectColumnExcludeFilter(int column_number) {
                 filter_type_enum = FilterType::LogLevel;
                 filter_value = selected_entry.Get_log_level().value();
             } else {
-                last_error_ = "Selected entry has no log level";
+                _Last_Error_ = "Selected entry has no log level";
                 return;
             }
             break;
@@ -3922,7 +4039,7 @@ void MainWindow::CreateDirectColumnExcludeFilter(int column_number) {
             filter_value = selected_entry.Get_message();
             break;
         default:
-            last_error_ = "Invalid column number: " + std::to_string(column_number + 1);
+            _Last_Error_ = "Invalid column number: " + std::to_string(column_number + 1);
             return;
     }
     
@@ -3931,21 +4048,21 @@ void MainWindow::CreateDirectColumnExcludeFilter(int column_number) {
     filter->SetFilterState(FilterState::EXCLUDE); // This makes it an exclude filter
     
     // Add the filter to the filter engine
-    auto result = filter_engine_->AddFilter(std::move(filter));
+    auto result = _Filter_Engine_->AddFilter(std::move(filter));
     if (result.IsError()) {
-        last_error_ = "Failed to create exclude filter: " + result.Get_error_message();
+        _Last_Error_ = "Failed to create exclude filter: " + result.Get_error_message();
         return;
     }
     
     // Refresh the filter panel to show the new filter
-    if (filter_panel_) {
-        filter_panel_->RefreshFilters();
+    if (_Filter_Panel_) {
+        _Filter_Panel_->RefreshFilters();
     }
     
     // Apply filters to update the display
     OnFiltersChanged();
     
-    last_error_ = "Exclude filter created: " + filter_name;
+    _Last_Error_ = "Exclude filter created: " + filter_name;
 }
 
 void MainWindow::PerformSearchHighlightOnly(const std::string& query) {
@@ -3995,7 +4112,7 @@ void MainWindow::PerformSearchHighlightOnly(const std::string& query) {
 void MainWindow::CopyCurrentLineToClipboard() {
     // Check if we have a selected entry
     if (selected_entry_index_ < 0 || selected_entry_index_ >= static_cast<int>(filtered_entries_.size())) {
-        last_error_ = "No log line selected to copy";
+        _Last_Error_ = "No log line selected to copy";
         return;
     }
     
@@ -4018,18 +4135,18 @@ void MainWindow::CopyCurrentLineToClipboard() {
                 GlobalUnlock(hMem);
                 
                 SetClipboardData(CF_TEXT, hMem);
-                last_error_ = "Log line copied to clipboard";
+                _Last_Error_ = "Log line copied to clipboard";
             } else {
                 GlobalFree(hMem);
-                last_error_ = "Failed to lock clipboard memory";
+                _Last_Error_ = "Failed to lock clipboard memory";
             }
         } else {
-            last_error_ = "Failed to allocate clipboard memory";
+            _Last_Error_ = "Failed to allocate clipboard memory";
         }
         
         CloseClipboard();
     } else {
-        last_error_ = "Failed to open clipboard";
+        _Last_Error_ = "Failed to open clipboard";
     }
     #else
     // For non-Windows systems, we could use xclip or pbcopy, but for now just show an error
@@ -4037,13 +4154,170 @@ void MainWindow::CopyCurrentLineToClipboard() {
     #endif
 }
 
+void MainWindow::CopyVisualSelectionToClipboard() {
+    // Check if we're in visual selection mode
+    if (!visual_selection_mode_) {
+        _Last_Error_ = "Not in visual selection mode";
+        return;
+    }
+    
+    // Get the selection range
+    auto range = GetVisualSelectionRange();
+    if (range.first == -1 || range.second == -1) {
+        _Last_Error_ = "Invalid visual selection range";
+        return;
+    }
+    
+    // Check bounds
+    if (range.first < 0 || range.second >= static_cast<int>(filtered_entries_.size())) {
+        _Last_Error_ = "Visual selection range out of bounds";
+        return;
+    }
+    
+    // Extract raw log lines from the selection range
+    std::string lines_to_copy;
+    for (int i = range.first; i <= range.second; ++i) {
+        const auto& entry = filtered_entries_[i];
+        lines_to_copy += entry.Get_raw_line();
+        
+        // Add line break if not the last line
+        if (i < range.second) {
+            lines_to_copy += "\r\n"; // Windows line endings
+        }
+    }
+    
+    // Copy to clipboard using Windows API
+    #ifdef _WIN32
+    if (OpenClipboard(nullptr)) {
+        EmptyClipboard();
+        
+        // Allocate global memory for the text
+        HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, lines_to_copy.size() + 1);
+        if (hMem) {
+            char* pMem = static_cast<char*>(GlobalLock(hMem));
+            if (pMem) {
+                strcpy_s(pMem, lines_to_copy.size() + 1, lines_to_copy.c_str());
+                GlobalUnlock(hMem);
+                
+                SetClipboardData(CF_TEXT, hMem);
+                
+                // Success message
+                int selection_size = GetVisualSelectionSize();
+                _Last_Error_ = std::to_string(selection_size) + 
+                              (selection_size == 1 ? " line copied to clipboard" : " lines copied to clipboard");
+            } else {
+                GlobalFree(hMem);
+                _Last_Error_ = "Failed to lock clipboard memory";
+            }
+        } else {
+            _Last_Error_ = "Failed to allocate clipboard memory";
+        }
+        
+        CloseClipboard();
+    } else {
+        _Last_Error_ = "Failed to open clipboard";
+    }
+    #else
+    // For non-Windows systems, we could use xclip or pbcopy, but for now just show an error
+    _Last_Error_ = "Clipboard functionality not implemented for this platform";
+    #endif
+}
+
+void MainWindow::EnterVisualSelectionMode() {
+    // Only enter visual selection mode if we have entries and a valid selection
+    if (filtered_entries_.empty() || selected_entry_index_ < 0 || 
+        selected_entry_index_ >= static_cast<int>(filtered_entries_.size())) {
+        _Last_Error_ = "No log line selected to start visual selection";
+        return;
+    }
+    
+    visual_selection_mode_ = true;
+    visual_selection_anchor_ = selected_entry_index_;
+    visual_selection_start_ = selected_entry_index_;
+    visual_selection_end_ = selected_entry_index_;
+    
+    _Last_Error_ = "Visual selection mode activated";
+}
+
+void MainWindow::ExitVisualSelectionMode() {
+    visual_selection_mode_ = false;
+    visual_selection_anchor_ = -1;
+    visual_selection_start_ = -1;
+    visual_selection_end_ = -1;
+    
+    // Only set deactivation message if there's no existing message (like copy success)
+    if (_Last_Error_.empty()) {
+        _Last_Error_ = "Visual selection mode deactivated";
+    }
+}
+
+bool MainWindow::IsVisualSelectionMode() const {
+    return visual_selection_mode_;
+}
+
+std::pair<int, int> MainWindow::GetVisualSelectionRange() const {
+    if (!visual_selection_mode_ || visual_selection_anchor_ == -1 || visual_selection_end_ == -1) {
+        return {-1, -1};
+    }
+    
+    int start = std::min(visual_selection_anchor_, visual_selection_end_);
+    int end = std::max(visual_selection_anchor_, visual_selection_end_);
+    
+    return {start, end};
+}
+
+int MainWindow::GetVisualSelectionSize() const {
+    if (!visual_selection_mode_ || visual_selection_anchor_ == -1 || visual_selection_end_ == -1) {
+        return 0;
+    }
+    
+    auto range = GetVisualSelectionRange();
+    return range.second - range.first + 1;
+}
+
+void MainWindow::ExtendVisualSelection(int new_end_index) {
+    // Only extend selection if we're in visual selection mode
+    if (!visual_selection_mode_ || visual_selection_anchor_ == -1) {
+        return;
+    }
+    
+    // Bounds checking - ensure new_end_index is within valid range
+    if (filtered_entries_.empty()) {
+        return;
+    }
+    
+    // Clamp new_end_index to valid bounds
+    if (new_end_index < 0) {
+        new_end_index = 0;
+    } else if (new_end_index >= static_cast<int>(filtered_entries_.size())) {
+        new_end_index = static_cast<int>(filtered_entries_.size()) - 1;
+    }
+    
+    // Update visual selection end point
+    visual_selection_end_ = new_end_index;
+    
+    // Update the current cursor position to the new end point
+    selected_entry_index_ = new_end_index;
+    
+    // Auto-scroll to keep the selection endpoint visible
+    EnsureSelectionVisible();
+    
+    // Update selection range for consistency
+    visual_selection_start_ = std::min(visual_selection_anchor_, visual_selection_end_);
+    
+    // Update status message
+    int selection_size = GetVisualSelectionSize();
+    _Last_Error_ = "Visual selection: " + std::to_string(selection_size) + 
+                   (selection_size == 1 ? " line selected" : " lines selected");
+}
+
 std::string MainWindow::GetFilterHighlightTerm() const {
     // Only highlight if filter panel is visible and has a selected filter
-    if (!filter_panel_ || !show_filter_panel_) {
+    if (!_Filter_Panel_ || !show_filter_panel_) {
         return "";
     }
     
-    const Filter* selected_filter = filter_panel_->GetSelectedFilter();
+    const Filter* selected_filter = _Filter_Panel_->GetSelectedFilter();
     if (!selected_filter) {
         return "";
     }

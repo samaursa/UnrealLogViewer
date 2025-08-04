@@ -1,0 +1,6 @@
+[2024.01.15-10.30.45:123][456]LogTemp: Warning: First warning message
+[2024.01.15-10.30.46:124][457]LogCore: Error: First error message
+[2024.01.15-10.30.47:125][458]LogTemp: Info: First info message
+[2024.01.15-10.30.48:126][459]LogCore: Debug: First debug message
+[2024.01.15-10.30.49:127][460]LogTemp: Warning: Second warning message
+[2024.01.15-10.30.50:128][461]LogCore: Error: Second error message

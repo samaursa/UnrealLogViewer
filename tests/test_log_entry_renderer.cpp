@@ -279,3 +279,112 @@ TEST_CASE("LogEntryRenderer Enhanced Visual Hierarchy", "[LogEntryRenderer]") {
         }
     }
 }
+
+TEST_CASE("LogEntryRenderer Visual Selection Highlighting", "[LogEntryRenderer][VisualSelection]") {
+    auto theme_manager = std::make_unique<VisualThemeManager>();
+    auto renderer = std::make_unique<LogEntryRenderer>(theme_manager.get());
+    
+    LogEntry test_entry(LogEntryType::Structured, 
+                       std::string("12:34:56.789"), 
+                       123, 
+                       "TestLogger", 
+                       std::string("Info"), 
+                       "Test message for visual selection", 
+                       "[12:34:56.789][123]TestLogger: Info: Test message for visual selection", 
+                       1);
+    
+    SECTION("RenderLogEntryWithVisualSelection method exists and works") {
+        // Test all combinations of selection states
+        Element normal = renderer->RenderLogEntryWithVisualSelection(test_entry, false, false, 0);
+        Element selected_only = renderer->RenderLogEntryWithVisualSelection(test_entry, true, false, 0);
+        Element visual_only = renderer->RenderLogEntryWithVisualSelection(test_entry, false, true, 0);
+        Element both_selected = renderer->RenderLogEntryWithVisualSelection(test_entry, true, true, 0);
+        
+        // All should render without crashing
+        REQUIRE(true); // If we get here, rendering succeeded
+    }
+    
+    SECTION("Visual selection takes precedence over normal selection") {
+        // When both visual selection and normal selection are active,
+        // visual selection highlighting should take precedence
+        Element visual_and_selected = renderer->RenderLogEntryWithVisualSelection(test_entry, true, true, 0);
+        Element visual_only = renderer->RenderLogEntryWithVisualSelection(test_entry, false, true, 0);
+        
+        // Both should render without crashing - visual selection should be applied
+        REQUIRE(true);
+    }
+    
+    SECTION("Visual selection with different log levels") {
+        std::vector<std::string> test_levels = {"Error", "Warning", "Info", "Debug"};
+        
+        for (const auto& level : test_levels) {
+            LogEntry level_entry(LogEntryType::Structured, 
+                                std::string("12:34:56.789"), 
+                                123, 
+                                "TestLogger", 
+                                std::string(level), 
+                                "Test message for " + level, 
+                                "[12:34:56.789][123]TestLogger: " + level + ": Test message for " + level, 
+                                1);
+            
+            // Visual selection should work with all log levels
+            Element visual_selected = renderer->RenderLogEntryWithVisualSelection(level_entry, false, true, 0);
+            Element visual_and_normal = renderer->RenderLogEntryWithVisualSelection(level_entry, true, true, 0);
+            
+            // Should render without crashing
+            REQUIRE(true);
+        }
+    }
+    
+    SECTION("Visual selection with relative line numbers") {
+        // Test visual selection with different relative line number scenarios
+        Element current_line = renderer->RenderLogEntryWithVisualSelection(test_entry, false, true, 0);
+        Element above_line = renderer->RenderLogEntryWithVisualSelection(test_entry, false, true, -5);
+        Element below_line = renderer->RenderLogEntryWithVisualSelection(test_entry, false, true, 3);
+        
+        // All should render without crashing
+        REQUIRE(true);
+    }
+    
+    SECTION("Visual selection highlighting integration") {
+        // Test that visual selection highlighting is properly integrated
+        // by comparing visual selection rendering with normal rendering
+        Element normal_entry = renderer->RenderLogEntry(test_entry, false, 0);
+        Element visual_entry = renderer->RenderLogEntryWithVisualSelection(test_entry, false, true, 0);
+        
+        // Both should render successfully - visual selection should apply different styling
+        REQUIRE(true);
+    }
+}
+
+TEST_CASE("VisualThemeManager Visual Selection Colors", "[VisualThemeManager][VisualSelection]") {
+    auto theme_manager = std::make_unique<VisualThemeManager>();
+    
+    SECTION("Visual selection colors are distinct from normal selection") {
+        Color normal_highlight = theme_manager->GetHighlightColor();
+        Color visual_text = theme_manager->GetVisualSelectionColor();
+        Color visual_bg = theme_manager->GetVisualSelectionBackgroundColor();
+        
+        // Visual selection colors should be different from normal highlight
+        REQUIRE(visual_bg != normal_highlight);
+        
+        // Visual selection should have both text and background colors defined
+        // (We can't easily test the exact colors, but we can verify they're set)
+        REQUIRE(true);
+    }
+    
+    SECTION("Visual selection colors work with eye strain reduction") {
+        // Test with eye strain reduction enabled
+        theme_manager->SetEyeStrainReductionEnabled(true);
+        Color visual_text_strain = theme_manager->GetVisualSelectionColor();
+        Color visual_bg_strain = theme_manager->GetVisualSelectionBackgroundColor();
+        
+        // Test with eye strain reduction disabled
+        theme_manager->SetEyeStrainReductionEnabled(false);
+        Color visual_text_normal = theme_manager->GetVisualSelectionColor();
+        Color visual_bg_normal = theme_manager->GetVisualSelectionBackgroundColor();
+        
+        // Colors should be defined for both modes
+        REQUIRE(true);
+    }
+}

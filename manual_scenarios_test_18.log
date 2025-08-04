@@ -1,0 +1,15 @@
+[2024.01.15-10.30.45:123][456]LogTemp: Info: Application started successfully
+[2024.01.15-10.30.46:124][457]LogCore: Warning: Memory usage is high (85%)
+[2024.01.15-10.30.47:125][458]LogGame: Info: Player connected: PlayerID=12345
+[2024.01.15-10.30.48:126][459]LogTemp: Error: Failed to load texture: missing_texture.png
+[2024.01.15-10.30.49:127][460]LogCore: Info: Garbage collection completed in 15ms
+[2024.01.15-10.30.50:128][461]LogGame: Warning: Player health is critical (5/100)
+[2024.01.15-10.30.51:129][462]LogTemp: Info: Save game completed successfully
+[2024.01.15-10.30.52:130][463]LogCore: Error: Network connection lost
+[2024.01.15-10.30.53:131][464]LogGame: Info: Attempting to reconnect...
+[2024.01.15-10.30.54:132][465]LogCore: Info: Network connection restored
+[2024.01.15-10.30.55:133][466]LogTemp: Warning: Frame rate dropped below 30 FPS
+[2024.01.15-10.30.56:134][467]LogGame: Info: Level transition completed
+[2024.01.15-10.30.57:135][468]LogCore: Info: Performance optimization applied
+[2024.01.15-10.30.58:136][469]LogTemp: Error: Shader compilation failed
+[2024.01.15-10.30.59:137][470]LogGame: Info: Player disconnected: PlayerID=12345

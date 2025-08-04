@@ -318,6 +318,85 @@ TEST_CASE("VisualThemeManager Color Consistency Across Sessions", "[ui][visual_t
     }
 }
 
+TEST_CASE("VisualThemeManager Visual Selection Colors", "[ui][visual_theme_manager]") {
+    VisualThemeManager theme_manager;
+    
+    SECTION("Visual selection colors are distinct from normal selection") {
+        auto highlight_color = theme_manager.GetHighlightColor();
+        auto visual_selection_color = theme_manager.GetVisualSelectionColor();
+        auto visual_selection_bg_color = theme_manager.GetVisualSelectionBackgroundColor();
+        
+        // Visual selection colors should be valid
+        REQUIRE(visual_selection_color != ftxui::Color::Default);
+        REQUIRE(visual_selection_bg_color != ftxui::Color::Default);
+        
+        // Visual selection background should be different from normal highlight
+        REQUIRE(visual_selection_bg_color != highlight_color);
+        
+        // Visual selection text and background should be different
+        REQUIRE(visual_selection_color != visual_selection_bg_color);
+    }
+    
+    SECTION("Visual selection colors work with eye strain reduction") {
+        VisualThemeManager theme_manager_eye_strain;
+        VisualThemeManager theme_manager_normal;
+        
+        // Enable eye strain reduction on one instance
+        theme_manager_eye_strain.SetEyeStrainReductionEnabled(true);
+        theme_manager_normal.SetEyeStrainReductionEnabled(false);
+        
+        auto eye_strain_visual_color = theme_manager_eye_strain.GetVisualSelectionColor();
+        auto eye_strain_visual_bg = theme_manager_eye_strain.GetVisualSelectionBackgroundColor();
+        auto normal_visual_color = theme_manager_normal.GetVisualSelectionColor();
+        auto normal_visual_bg = theme_manager_normal.GetVisualSelectionBackgroundColor();
+        
+        // Colors should be valid in both modes
+        REQUIRE(eye_strain_visual_color != ftxui::Color::Default);
+        REQUIRE(eye_strain_visual_bg != ftxui::Color::Default);
+        REQUIRE(normal_visual_color != ftxui::Color::Default);
+        REQUIRE(normal_visual_bg != ftxui::Color::Default);
+        
+        // Eye strain colors may be different from normal colors
+        // (This allows for different color schemes but doesn't require them)
+        // The important thing is that they're both valid and distinct from their respective highlight colors
+        auto eye_strain_highlight = theme_manager_eye_strain.GetHighlightColor();
+        auto normal_highlight = theme_manager_normal.GetHighlightColor();
+        
+        REQUIRE(eye_strain_visual_bg != eye_strain_highlight);
+        REQUIRE(normal_visual_bg != normal_highlight);
+    }
+    
+    SECTION("Visual selection colors are consistent across calls") {
+        auto visual_color1 = theme_manager.GetVisualSelectionColor();
+        auto visual_color2 = theme_manager.GetVisualSelectionColor();
+        auto visual_bg1 = theme_manager.GetVisualSelectionBackgroundColor();
+        auto visual_bg2 = theme_manager.GetVisualSelectionBackgroundColor();
+        
+        // Colors should be consistent
+        REQUIRE(visual_color1 == visual_color2);
+        REQUIRE(visual_bg1 == visual_bg2);
+    }
+    
+    SECTION("Visual selection colors maintain contrast") {
+        auto visual_text_color = theme_manager.GetVisualSelectionColor();
+        auto visual_bg_color = theme_manager.GetVisualSelectionBackgroundColor();
+        
+        // Text and background should be different to ensure contrast
+        REQUIRE(visual_text_color != visual_bg_color);
+        
+        // Test with both eye strain modes
+        theme_manager.SetEyeStrainReductionEnabled(true);
+        auto eye_strain_text = theme_manager.GetVisualSelectionColor();
+        auto eye_strain_bg = theme_manager.GetVisualSelectionBackgroundColor();
+        REQUIRE(eye_strain_text != eye_strain_bg);
+        
+        theme_manager.SetEyeStrainReductionEnabled(false);
+        auto normal_text = theme_manager.GetVisualSelectionColor();
+        auto normal_bg = theme_manager.GetVisualSelectionBackgroundColor();
+        REQUIRE(normal_text != normal_bg);
+    }
+}
+
 TEST_CASE("VisualThemeManager Edge Cases", "[ui][visual_theme_manager]") {
     
     SECTION("Many loggers beyond palette size") {

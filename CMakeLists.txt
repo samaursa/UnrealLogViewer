@@ -129,6 +129,16 @@ add_executable(unreal_log_tests
   tests/test_detail_view_focus.cpp
   tests/test_unreal_project_utils.cpp
   tests/test_file_browser.cpp
+  tests/test_visual_selection_extension.cpp
+  tests/test_visual_selection_rendering.cpp
+  tests/test_visual_selection_clipboard.cpp
+  tests/test_visual_selection_status_bar.cpp
+  tests/test_y_key_copy_functionality.cpp
+  tests/test_visual_selection_comprehensive.cpp
+  tests/test_visual_selection_error_handling.cpp
+  tests/test_visual_selection_performance.cpp
+  tests/test_visual_selection_manual_scenarios.cpp
+  tests/test_visual_selection_comprehensive_validation.cpp
 )
 
 # Link test application dependencies
@@ -304,6 +314,86 @@ target_link_libraries(test_g_key_debug
   PRIVATE ftxui::component
 )
 
+# Create a visual selection keyboard test executable
+add_executable(test_visual_selection_keyboard
+  test_visual_selection_keyboard.cpp
+)
+
+# Link visual selection keyboard test dependencies
+target_link_libraries(test_visual_selection_keyboard
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a visual selection activation test executable
+add_executable(test_visual_selection_activation
+  test_visual_selection_activation.cpp
+)
+
+# Link visual selection activation test dependencies
+target_link_libraries(test_visual_selection_activation
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a visual selection integration test executable
+add_executable(test_visual_selection_integration
+  test_visual_selection_integration.cpp
+)
+
+# Link visual selection integration test dependencies
+target_link_libraries(test_visual_selection_integration
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a visual selection extension demo executable
+add_executable(test_visual_selection_extension_demo
+  test_visual_selection_extension_demo.cpp
+)
+
+# Link visual selection extension demo dependencies
+target_link_libraries(test_visual_selection_extension_demo
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a visual selection feature compatibility test executable
+add_executable(test_visual_selection_feature_compatibility
+  tests/test_visual_selection_feature_compatibility.cpp
+)
+
+# Link visual selection feature compatibility test dependencies
+target_link_libraries(test_visual_selection_feature_compatibility
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a visual selection filter interaction test executable
+add_executable(test_visual_selection_filter_interaction
+  tests/test_visual_selection_filter_interaction.cpp
+)
+
+# Link visual selection filter interaction test dependencies
+target_link_libraries(test_visual_selection_filter_interaction
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+
+
 # Create a G key interactive test executable
 add_executable(test_g_key_interactive
   test_g_key_interactive.cpp
@@ -422,6 +512,8 @@ target_link_libraries(test_new_features
   PRIVATE ftxui::dom
   PRIVATE ftxui::component
 )
+
+
 
 # Create a keyboard shortcuts test executable
 add_executable(test_keyboard_shortcuts
@@ -565,3 +657,56 @@ target_link_libraries(test_scrollbar_tall
   PRIVATE ftxui::dom
   PRIVATE ftxui::component
 )
+
+# Create a clipboard demo executable
+add_executable(test_clipboard_demo
+  test_clipboard_demo.cpp
+)
+
+# Link clipboard demo dependencies
+target_link_libraries(test_clipboard_demo
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a status bar demo executable
+add_executable(test_status_bar_demo
+  test_status_bar_demo.cpp
+)
+
+# Link status bar demo dependencies
+target_link_libraries(test_status_bar_demo
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a reload behavior test executable
+add_executable(test_reload_behavior
+  test_reload_behavior.cpp
+)
+
+# Link reload behavior test dependencies
+target_link_libraries(test_reload_behavior
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+
+# Create a keyboard debug test executable
+add_executable(test_keyboard_debug
+  test_keyboard_debug.cpp
+)
+
+# Link keyboard debug test dependencies
+target_link_libraries(test_keyboard_debug
+  PRIVATE unreal_log_lib
+  PRIVATE ftxui::screen
+  PRIVATE ftxui::dom
+  PRIVATE ftxui::component
+)
+

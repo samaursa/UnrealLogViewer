@@ -218,6 +218,7 @@ Element LogEntryRenderer::RenderLogLevel(const LogEntry& entry) const {
 }
 
 Element LogEntryRenderer::RenderMessage(const LogEntry& entry, bool is_selected) const {
+    (void)is_selected; // Parameter reserved for future use
     Element message_element;
     
     if (word_wrap_enabled_) {
@@ -599,6 +600,70 @@ Element LogEntryRenderer::RenderMessageWithSearchHighlight(const LogEntry& entry
     }
     
     return result;
+}
+
+Element LogEntryRenderer::RenderLogEntryWithVisualSelection(const LogEntry& entry, bool is_selected, 
+                                                           bool is_visual_selected,
+                                                           int relative_line_number) const {
+    std::vector<Element> row_elements;
+    
+    // Get column spacing configuration
+    auto spacing = theme_manager_->GetColumnSpacing();
+    
+    // Line number column (if enabled)
+    if (show_line_numbers_) {
+        row_elements.push_back(RenderLineNumber(relative_line_number, is_selected));
+        row_elements.push_back(CreateSeparator());
+    }
+    
+    // Timestamp column
+    row_elements.push_back(RenderTimestamp(entry));
+    row_elements.push_back(CreateSeparator());
+    
+    // Frame number column
+    row_elements.push_back(RenderFrameNumber(entry));
+    row_elements.push_back(CreateSeparator());
+    
+    // Logger badge column
+    row_elements.push_back(RenderLoggerBadge(entry));
+    row_elements.push_back(CreateSeparator());
+    
+    // Log level column
+    row_elements.push_back(RenderLogLevel(entry));
+    row_elements.push_back(CreateSeparator());
+    
+    // Message column (flexible width)
+    row_elements.push_back(RenderMessage(entry, is_selected) | flex);
+    
+    // Create the row with proper spacing
+    Element row = hbox(row_elements);
+    
+    // Apply row-level visual hierarchy - always apply to maintain column alignment
+    std::string level = entry.Get_log_level().has_value() ? entry.Get_log_level().value() : "";
+    row = ApplyRowLevelHierarchy(row, level, is_selected);
+    
+    // Apply visual selection highlighting first (takes precedence over normal selection)
+    if (is_visual_selected) {
+        row = ApplyVisualSelectionHighlight(row, true);
+    }
+    // Apply normal selection highlighting only if not in visual selection
+    else if (is_selected) {
+        row = row | inverted;
+    }
+    
+    return row;
+}
+
+Element LogEntryRenderer::ApplyVisualSelectionHighlight(Element element, bool is_visual_selected) const {
+    if (!is_visual_selected) {
+        return element;
+    }
+    
+    // Apply visual selection colors - distinct from normal selection
+    Color visual_bg_color = theme_manager_->GetVisualSelectionBackgroundColor();
+    Color visual_text_color = theme_manager_->GetVisualSelectionColor();
+    
+    return element | bgcolor(visual_bg_color) | color(visual_text_color);
 }
 
 } // namespace ue_log

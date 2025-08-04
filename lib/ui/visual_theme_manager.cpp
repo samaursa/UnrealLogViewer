@@ -169,6 +169,22 @@ ftxui::Color VisualThemeManager::GetHighlightColor() const {
            ftxui::Color::Blue;
 }
 
+ftxui::Color VisualThemeManager::GetVisualSelectionColor() const {
+    // Visual selection should use a distinct color from normal selection
+    // Using a warmer tone to differentiate from the cooler highlight color
+    return eye_strain_reduction_enabled_ ? 
+           ftxui::Color::RGB(255, 255, 255) : // White text for good contrast on visual selection background
+           ftxui::Color::White;
+}
+
+ftxui::Color VisualThemeManager::GetVisualSelectionBackgroundColor() const {
+    // Visual selection background should be distinct from normal highlight
+    // Using a purple/magenta tone to clearly differentiate from blue highlight
+    return eye_strain_reduction_enabled_ ? 
+           ftxui::Color::RGB(138, 43, 226) :  // Blue violet - distinct but not harsh
+           ftxui::Color::Magenta;             // Bright magenta for high contrast
+}
+
 ftxui::Color VisualThemeManager::GetFocusColor() const {
     return eye_strain_reduction_enabled_ ? 
            ftxui::Color::RGB(135, 206, 250) : // Light sky blue for focus

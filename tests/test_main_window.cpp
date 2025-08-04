@@ -457,6 +457,269 @@ TEST_CASE("MainWindow Error Handling", "[ui][main_window][error]") {
     }
 }
 
+TEST_CASE("MainWindow Visual Selection State Management", "[ui][main_window][visual_selection]") {
+    
+    SECTION("Initial visual selection state") {
+        MainWindow window;
+        window.Initialize();
+        
+        // Initially not in visual selection mode
+        REQUIRE_FALSE(window.IsVisualSelectionMode());
+        REQUIRE(window.GetVisualSelectionRange() == std::make_pair(-1, -1));
+        REQUIRE(window.GetVisualSelectionSize() == 0);
+    }
+    
+    SECTION("EnterVisualSelectionMode with no file loaded") {
+        MainWindow window;
+        window.Initialize();
+        
+        // Should not enter visual selection mode without loaded file
+        window.EnterVisualSelectionMode();
+        REQUIRE_FALSE(window.IsVisualSelectionMode());
+        REQUIRE_FALSE(window.GetLastError().empty());
+    }
+    
+    SECTION("EnterVisualSelectionMode with loaded file") {
+        std::string test_file = "visual_selection_test.log";
+        CreateTestLogFile(test_file, CreateSampleLogLines());
+        
+        MainWindow window;
+        window.Initialize();
+        window.LoadLogFile(test_file);
+        
+        // Should enter visual selection mode successfully
+        window.EnterVisualSelectionMode();
+        REQUIRE(window.IsVisualSelectionMode());
+        REQUIRE(window.GetVisualSelectionRange() == std::make_pair(0, 0));
+        REQUIRE(window.GetVisualSelectionSize() == 1);
+        
+        DeleteTestFile(test_file);
+    }
+    
+    SECTION("ExitVisualSelectionMode") {
+        std::string test_file = "visual_selection_exit_test.log";
+        CreateTestLogFile(test_file, CreateSampleLogLines());
+        
+        MainWindow window;
+        window.Initialize();
+        window.LoadLogFile(test_file);
+        
+        // Enter visual selection mode
+        window.EnterVisualSelectionMode();
+        REQUIRE(window.IsVisualSelectionMode());
+        
+        // Exit visual selection mode
+        window.ExitVisualSelectionMode();
+        REQUIRE_FALSE(window.IsVisualSelectionMode());
+        REQUIRE(window.GetVisualSelectionRange() == std::make_pair(-1, -1));
+        REQUIRE(window.GetVisualSelectionSize() == 0);
+        
+        DeleteTestFile(test_file);
+    }
+    
+    SECTION("Visual selection with different starting positions") {
+        std::string test_file = "visual_selection_position_test.log";
+        CreateTestLogFile(test_file, CreateSampleLogLines());
+        
+        MainWindow window;
+        window.Initialize();
+        window.LoadLogFile(test_file);
+        
+        // Navigate to different position
+        window.SelectNextEntry();
+        window.SelectNextEntry();
+        REQUIRE(window.GetSelectedEntryIndex() == 2);
+        
+        // Enter visual selection mode
+        window.EnterVisualSelectionMode();
+        REQUIRE(window.IsVisualSelectionMode());
+        REQUIRE(window.GetVisualSelectionRange() == std::make_pair(2, 2));
+        REQUIRE(window.GetVisualSelectionSize() == 1);
+        
+        DeleteTestFile(test_file);
+    }
+    
+    SECTION("GetVisualSelectionRange with invalid state") {
+        MainWindow window;
+        window.Initialize();
+        
+        // Without entering visual selection mode
+        auto range = window.GetVisualSelectionRange();
+        REQUIRE(range.first == -1);
+        REQUIRE(range.second == -1);
+        
+        // Size should be 0
+        REQUIRE(window.GetVisualSelectionSize() == 0);
+    }
+    
+    SECTION("Visual selection state persistence") {
+        std::string test_file = "visual_selection_persistence_test.log";
+        CreateTestLogFile(test_file, CreateSampleLogLines());
+        
+        MainWindow window;
+        window.Initialize();
+        window.LoadLogFile(test_file);
+        
+        // Enter visual selection mode
+        window.EnterVisualSelectionMode();
+        REQUIRE(window.IsVisualSelectionMode());
+        
+        // State should persist across other operations
+        window.RefreshDisplay();
+        REQUIRE(window.IsVisualSelectionMode());
+        
+        // Exit should clear state
+        window.ExitVisualSelectionMode();
+        REQUIRE_FALSE(window.IsVisualSelectionMode());
+        
+        DeleteTestFile(test_file);
+    }
+    
+    SECTION("Multiple enter/exit cycles") {
+        std::string test_file = "visual_selection_cycles_test.log";
+        CreateTestLogFile(test_file, CreateSampleLogLines());
+        
+        MainWindow window;
+        window.Initialize();
+        window.LoadLogFile(test_file);
+        
+        // Multiple enter/exit cycles should work correctly
+        for (int i = 0; i < 3; ++i) {
+            window.EnterVisualSelectionMode();
+            REQUIRE(window.IsVisualSelectionMode());
+            REQUIRE(window.GetVisualSelectionSize() == 1);
+            
+            window.ExitVisualSelectionMode();
+            REQUIRE_FALSE(window.IsVisualSelectionMode());
+            REQUIRE(window.GetVisualSelectionSize() == 0);
+        }
+        
+        DeleteTestFile(test_file);
+    }
+}
+
+TEST_CASE("MainWindow Visual Selection Mode Activation", "[ui][main_window][visual_selection][activation]") {
+    
+    SECTION("'v' key activates visual selection mode") {
+        std::string test_file = "visual_activation_test.log";
+        CreateTestLogFile(test_file, CreateSampleLogLines());
+        
+        MainWindow window;
+        window.Initialize();
+        window.LoadLogFile(test_file);
+        
+        // Initially not in visual selection mode
+        REQUIRE_FALSE(window.IsVisualSelectionMode());
+        
+        // Simulate 'v' key press through OnEvent
+        auto component = window.CreateFTXUIComponent();
+        ftxui::Event v_key = ftxui::Event::Character('v');
+        bool handled = component->OnEvent(v_key);
+        
+        // Should handle the event and enter visual selection mode
+        REQUIRE(handled);
+        REQUIRE(window.IsVisualSelectionMode());
+        REQUIRE(window.GetVisualSelectionSize() == 1);
+        
+        DeleteTestFile(test_file);
+    }
+    
+    SECTION("'v' key with no file loaded shows error") {
+        MainWindow window;
+        window.Initialize();
+        
+        // Initially not in visual selection mode
+        REQUIRE_FALSE(window.IsVisualSelectionMode());
+        
+        // Simulate 'v' key press through OnEvent
+        auto component = window.CreateFTXUIComponent();
+        ftxui::Event v_key = ftxui::Event::Character('v');
+        bool handled = component->OnEvent(v_key);
+        
+        // Should handle the event but not enter visual selection mode
+        REQUIRE(handled);
+        REQUIRE_FALSE(window.IsVisualSelectionMode());
+        REQUIRE_FALSE(window.GetLastError().empty());
+    }
+    
+    SECTION("Visual selection mode shows in status bar") {
+        std::string test_file = "visual_status_test.log";
+        CreateTestLogFile(test_file, CreateSampleLogLines());
+        
+        MainWindow window;
+        window.Initialize();
+        window.LoadLogFile(test_file);
+        
+        // Enter visual selection mode
+        window.EnterVisualSelectionMode();
+        REQUIRE(window.IsVisualSelectionMode());
+        
+        // Render the window to check status bar
+        auto rendered = window.Render();
+        REQUIRE(rendered != nullptr);
+        
+        // The status bar should contain visual selection indicator
+        // Note: We can't easily test the exact content without more complex rendering inspection
+        // but we can verify the mode is active and size is correct
+        REQUIRE(window.GetVisualSelectionSize() == 1);
+        
+        DeleteTestFile(test_file);
+    }
+    
+    SECTION("Visual selection mode activation at different positions") {
+        std::string test_file = "visual_position_activation_test.log";
+        CreateTestLogFile(test_file, CreateSampleLogLines());
+        
+        MainWindow window;
+        window.Initialize();
+        window.LoadLogFile(test_file);
+        
+        // Navigate to position 2
+        window.SelectNextEntry();
+        window.SelectNextEntry();
+        REQUIRE(window.GetSelectedEntryIndex() == 2);
+        
+        // Activate visual selection mode with 'v' key
+        auto component = window.CreateFTXUIComponent();
+        ftxui::Event v_key = ftxui::Event::Character('v');
+        bool handled = component->OnEvent(v_key);
+        
+        REQUIRE(handled);
+        REQUIRE(window.IsVisualSelectionMode());
+        REQUIRE(window.GetVisualSelectionRange() == std::make_pair(2, 2));
+        REQUIRE(window.GetVisualSelectionSize() == 1);
+        
+        DeleteTestFile(test_file);
+    }
+    
+    SECTION("Visual selection mode activation sets anchor point correctly") {
+        std::string test_file = "visual_anchor_test.log";
+        CreateTestLogFile(test_file, CreateSampleLogLines());
+        
+        MainWindow window;
+        window.Initialize();
+        window.LoadLogFile(test_file);
+        
+        // Navigate to position 3
+        for (int i = 0; i < 3; ++i) {
+            window.SelectNextEntry();
+        }
+        REQUIRE(window.GetSelectedEntryIndex() == 3);
+        
+        // Activate visual selection mode
+        window.EnterVisualSelectionMode();
+        
+        // Should set anchor point to current selection
+        REQUIRE(window.IsVisualSelectionMode());
+        auto range = window.GetVisualSelectionRange();
+        REQUIRE(range.first == 3);
+        REQUIRE(range.second == 3);
+        REQUIRE(window.GetVisualSelectionSize() == 1);
+        
+        DeleteTestFile(test_file);
+    }
+}
+
 TEST_CASE("MainWindow Integration", "[ui][main_window][integration]") {
     
     SECTION("Complete workflow") {

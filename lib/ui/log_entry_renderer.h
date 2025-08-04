@@ -116,6 +116,18 @@ public:
                                                    const std::string& search_query, 
                                                    bool case_sensitive) const;
     
+    /**
+     * Render a complete log entry with visual selection highlighting.
+     * @param entry The log entry to render
+     * @param is_selected Whether this entry is currently selected
+     * @param is_visual_selected Whether this entry is part of visual selection
+     * @param relative_line_number Optional relative line number for vim-style display
+     * @return FTXUI Element representing the rendered log entry with visual selection highlighting
+     */
+    ftxui::Element RenderLogEntryWithVisualSelection(const LogEntry& entry, bool is_selected, 
+                                                    bool is_visual_selected,
+                                                    int relative_line_number = 0) const;
+    
     // Configuration methods
     
     /**
@@ -224,6 +236,14 @@ private:
      * @return Padded text string
      */
     std::string PadText(const std::string& text, int width) const;
+    
+    /**
+     * Apply visual selection highlighting to an element.
+     * @param element The element to apply highlighting to
+     * @param is_visual_selected Whether visual selection highlighting should be applied
+     * @return Element with visual selection highlighting applied
+     */
+    ftxui::Element ApplyVisualSelectionHighlight(ftxui::Element element, bool is_visual_selected) const;
 };
 
 } // namespace ue_log
