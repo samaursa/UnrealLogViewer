@@ -43,33 +43,35 @@ public:
         
         // Navigation keys - extend selection
         if (event == Event::Character('j') || event == Event::ArrowDown) {
-            // Extend selection down by one line
-            int current_index = parent_->GetSelectedEntryIndex();
-            parent_->ExtendVisualSelection(current_index + 1);
+            // Use normal navigation which handles scrolling properly
+            parent_->ScrollDown(1);
+            // Then extend visual selection to the new position
+            parent_->ExtendVisualSelection(parent_->GetSelectedEntryIndex());
             return true;
         }
         
         if (event == Event::Character('k') || event == Event::ArrowUp) {
-            // Extend selection up by one line
-            int current_index = parent_->GetSelectedEntryIndex();
-            parent_->ExtendVisualSelection(current_index - 1);
+            // Use normal navigation which handles scrolling properly
+            parent_->ScrollUp(1);
+            // Then extend visual selection to the new position
+            parent_->ExtendVisualSelection(parent_->GetSelectedEntryIndex());
             return true;
         }
         
         // Ctrl+d/u for half-page navigation
         if (event == Event::Character(static_cast<char>(4))) { // Ctrl+D (ASCII 4)
-            // Extend selection down by half a screen
-            int current_index = parent_->GetSelectedEntryIndex();
-            int half_page = std::max(1, parent_->GetVisibleHeight() / 2);
-            parent_->ExtendVisualSelection(current_index + half_page);
+            // Use normal half-page navigation which handles scrolling properly
+            parent_->HalfPageDown();
+            // Then extend visual selection to the new position
+            parent_->ExtendVisualSelection(parent_->GetSelectedEntryIndex());
             return true;
         }
         
         if (event == Event::Character(static_cast<char>(21))) { // Ctrl+U (ASCII 21)
-            // Extend selection up by half a screen
-            int current_index = parent_->GetSelectedEntryIndex();
-            int half_page = std::max(1, parent_->GetVisibleHeight() / 2);
-            parent_->ExtendVisualSelection(current_index - half_page);
+            // Use normal half-page navigation which handles scrolling properly
+            parent_->HalfPageUp();
+            // Then extend visual selection to the new position
+            parent_->ExtendVisualSelection(parent_->GetSelectedEntryIndex());
             return true;
         }
         
@@ -1631,16 +1633,11 @@ ftxui::Element MainWindow::RenderLogTable() const {
         int end_idx = std::min(total_entries, start_idx + visible_height + buffer * 2);
         
         // If in visual selection mode, ensure the entire selection is included in the render window
-        // (but only if the selection is reasonably sized to avoid performance issues)
+        // but only for small selections to avoid interfering with scrolling
         if (visual_selection_mode_) {
             auto range = GetVisualSelectionRange();
             if (range.first >= 0 && range.second >= 0) {
                 int selection_size = range.second - range.first + 1;
-                // Only expand window if selection is reasonable size (less than 10x visible height)
-                if (selection_size <= visible_height * 10) {
-                    start_idx = std::min(start_idx, std::max(0, range.first - buffer / 2));
-                    end_idx = std::max(end_idx, std::min(total_entries, range.second + buffer / 2 + 1));
-                }
             }
         }
         
@@ -2206,12 +2203,19 @@ void MainWindow::SelectEntry(int index) {
 }
 
 void MainWindow::EnsureSelectionVisible() {
-    if (selected_entry_index_ < 0) {
+    if (selected_entry_index_ < 0 || filtered_entries_.empty()) {
         return;
     }
     
     // Get the visible height using the consistent method
     int visible_height = GetVisibleHeight();
+    int total_entries = static_cast<int>(filtered_entries_.size());
+    
+    // If we have fewer entries than visible height, no scrolling needed
+    if (total_entries <= visible_height) {
+        scroll_offset_ = 0;
+        return;
+    }
     
     // Update scroll_offset_ to ensure the selected entry is visible
     // with some context around it
@@ -2224,12 +2228,27 @@ void MainWindow::EnsureSelectionVisible() {
     // If selection is below visible area, scroll down to show it with some context
     else if (selected_entry_index_ >= scroll_offset_ + visible_height) {
         // Position the selected entry 3/4 of the way down from the top
-        scroll_offset_ = selected_entry_index_ - (visible_height * 3 / 4);
+        int target_offset = selected_entry_index_ - (visible_height * 3 / 4);
+        
+        // For selections near the end, allow scrolling to show the selection
+        // even if it means showing fewer entries at the bottom
+        scroll_offset_ = std::max(0, target_offset);
     }
     
-    // Ensure we don't scroll past the beginning or end
+    // Ensure we don't scroll past the beginning
     scroll_offset_ = std::max(0, scroll_offset_);
-    int max_offset = std::max(0, static_cast<int>(filtered_entries_.size()) - visible_height);
+    
+    // For the maximum offset, be more permissive to allow proper scrolling
+    // when the selection is near the end of the file
+    int max_offset = std::max(0, total_entries - 1); // Allow scrolling to show last entry
+    if (selected_entry_index_ >= total_entries - visible_height) {
+        // When near the end, allow more flexible scrolling
+        max_offset = total_entries - 1;
+    } else {
+        // Normal case: don't scroll past the point where we'd have empty space at bottom
+        max_offset = total_entries - visible_height;
+    }
+    
     scroll_offset_ = std::min(scroll_offset_, max_offset);
 }
 

@@ -81,13 +81,13 @@ int visible_height = std::max(10, available_height / 2 - 4);
 
 ## Fallback Values Used
 
-| Scenario | Fallback Value | Reasoning |
-|----------|---------------|-----------|
-| **Window Height** | 30 lines | Reasonable terminal size assumption |
+| Scenario                  | Fallback Value   | Reasoning                                    |
+| ------------------------- | ---------------- | -------------------------------------------- |
+| **Window Height**         | 30 lines         | Reasonable terminal size assumption          |
 | **Focused Detail Height** | 15 lines minimum | Ensures usable space even on small terminals |
-| **Page Size** | 5 lines minimum | Meaningful page navigation |
-| **Half Page Size** | 2 lines minimum | Minimal but useful half-page movement |
-| **Visible Height** | 10 lines minimum | Adequate content viewing area |
+| **Page Size**             | 5 lines minimum  | Meaningful page navigation                   |
+| **Half Page Size**        | 2 lines minimum  | Minimal but useful half-page movement        |
+| **Visible Height**        | 10 lines minimum | Adequate content viewing area                |
 
 ## Testing Results
 
