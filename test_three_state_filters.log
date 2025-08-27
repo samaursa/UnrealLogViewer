@@ -1,6 +1,0 @@
-[2024-01-15-12.30.45:123][  0]LogTemp: Display: Test message 1
-[2024-01-15-12.30.46:124][  1]LogCore: Warning: Test warning message
-[2024-01-15-12.30.47:125][  2]LogTemp: Display: Test message 2
-[2024-01-15-12.30.48:126][  3]LogCore: Error: Test error message
-[2024-01-15-12.30.49:127][  4]LogTemp: Display: Test message 3
-[2024-01-15-12.30.50:128][  5]LogCore: Warning: Another warning

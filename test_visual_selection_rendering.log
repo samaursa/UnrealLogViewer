@@ -1,5 +1,0 @@
-[2023-01-01 10:00:00.000] [Frame: 1] [LogTemp] Info: First log entry
-[2023-01-01 10:00:01.000] [Frame: 2] [LogTemp] Warning: Second log entry
-[2023-01-01 10:00:02.000] [Frame: 3] [LogTemp] Error: Third log entry
-[2023-01-01 10:00:03.000] [Frame: 4] [LogTemp] Info: Fourth log entry
-[2023-01-01 10:00:04.000] [Frame: 5] [LogTemp] Info: Fifth log entry
