@@ -175,7 +175,12 @@ namespace ue_log {
     }
     
     void MainWindow::ScrollDown(int lines) {
-        int max_scroll = std::max(0, static_cast<int>(filtered_entries.size()) - visible_rows);
+        if (filtered_entries.size() <= static_cast<size_t>(visible_rows)) {
+            // If we have fewer entries than visible rows, don't scroll
+            return;
+        }
+
+        int max_scroll = static_cast<int>(filtered_entries.size()) - visible_rows;
         scroll_offset = std::min(max_scroll, scroll_offset + lines);
         needs_refresh = true;
     }
@@ -197,7 +202,13 @@ namespace ue_log {
     void MainWindow::GoToBottom() {
         if (!filtered_entries.empty()) {
             selected_entry_index = static_cast<int>(filtered_entries.size()) - 1;
-            EnsureSelectionVisible();
+
+            // Position scroll so the last entries are visible
+            if (filtered_entries.size() <= static_cast<size_t>(visible_rows)) {
+                scroll_offset = 0;
+            } else {
+                scroll_offset = static_cast<int>(filtered_entries.size()) - visible_rows;
+            }
         }
         needs_refresh = true;
     }
@@ -588,8 +599,14 @@ namespace ue_log {
     }
     
     void MainWindow::ClampScrollOffset() {
-        int max_scroll = std::max(0, static_cast<int>(filtered_entries.size()) - visible_rows);
-        scroll_offset = std::clamp(scroll_offset, 0, max_scroll);
+        if (filtered_entries.size() <= static_cast<size_t>(visible_rows)) {
+            // If we have fewer entries than visible rows, always start from the beginning
+            scroll_offset = 0;
+        } else {
+            // Ensure we don't scroll past the point where we can fill all visible rows
+            int max_scroll = static_cast<int>(filtered_entries.size()) - visible_rows;
+            scroll_offset = std::clamp(scroll_offset, 0, max_scroll);
+        }
     }
     
     void MainWindow::ClampSelection() {

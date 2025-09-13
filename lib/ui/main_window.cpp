@@ -1810,43 +1810,31 @@ ftxui::Element MainWindow::RenderDetailView() const {
     if (selected_entry_index_ < 0 || selected_entry_index_ >= static_cast<int>(filtered_entries_.size())) {
         Element no_selection = text("No entry selected") | center;
         no_selection = no_selection | color(_Visual_Theme_Manager_->GetMutedTextColor());
-        
-        const auto& selected_entry = filtered_entries_[selected_entry_index_];
 
-        // Create title with focus indicator and navigation info
-        std::string entry_type = selected_entry.IsStructured() ? "Structured" : 
-                                selected_entry.IsSemiStructured() ? "Semi-Structured" : "Unstructured";
-        std::string title_text = "Detail View - Line " + std::to_string(selected_entry.Get_line_number()) + " (" + entry_type + ")";
-        Element title = text(title_text);
+        Element title = text("Detail View - No Selection");
         if (_Visual_Theme_Manager_->GetFontWeight("header")) {
             title = title | bold;
         }
-        title = title | color(detail_view_focused_ ? 
-                             _Visual_Theme_Manager_->GetFocusColor() : 
+        title = title | color(detail_view_focused_ ?
+                             _Visual_Theme_Manager_->GetFocusColor() :
                              _Visual_Theme_Manager_->GetHighlightColor());
-        
+
         return window(title, no_selection);
     }
-    
+
     const auto& selected_entry = filtered_entries_[selected_entry_index_];
-    
+
     // Create title with focus indicator and navigation info
-    std::string entry_type = selected_entry.IsStructured() ? "Structured" : 
+    std::string entry_type = selected_entry.IsStructured() ? "Structured" :
                             selected_entry.IsSemiStructured() ? "Semi-Structured" : "Unstructured";
     std::string title_text = "Detail View - Line " + std::to_string(selected_entry.Get_line_number()) + " (" + entry_type + ")";
-    
-    //if (detail_view_focused_) {
-    //    title_text += " [FOCUSED - J/K to scroll, ESC to unfocus]";
-    //} else {
-    //    title_text += " [TAB to focus]";
-    //}
-    
+
     Element title = text(title_text);
     if (_Visual_Theme_Manager_->GetFontWeight("header")) {
         title = title | bold;
     }
-    title = title | color(detail_view_focused_ ? 
-                         _Visual_Theme_Manager_->GetFocusColor() : 
+    title = title | color(detail_view_focused_ ?
+                         _Visual_Theme_Manager_->GetFocusColor() :
                          _Visual_Theme_Manager_->GetHighlightColor());
     
     // Use the full raw line instead of just the parsed message
