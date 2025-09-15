@@ -10,18 +10,18 @@ VisualThemeManager::VisualThemeManager()
 
 void VisualThemeManager::InitializeColorPalette() {
     // Initialize logger badge colors with a diverse, accessible palette
-    // Optimized for eye strain reduction and extended use
+    // Optimized for light themes with soft, readable colors
     if (eye_strain_reduction_enabled_) {
         logger_color_palette_ = {
-            ftxui::Color::RGB(100, 149, 237),  // Cornflower blue - easier on eyes
-            ftxui::Color::RGB(60, 179, 113),   // Medium sea green - softer green
-            ftxui::Color::RGB(72, 209, 204),   // Medium turquoise - gentle cyan
-            ftxui::Color::RGB(186, 85, 211),   // Medium orchid - softer magenta
-            ftxui::Color::RGB(255, 215, 0),    // Gold - warmer yellow
-            ftxui::Color::RGB(135, 206, 250),  // Light sky blue - very gentle
-            ftxui::Color::RGB(144, 238, 144),  // Light green - easy on eyes
-            ftxui::Color::RGB(175, 238, 238),  // Pale turquoise - very soft
-            ftxui::Color::RGB(221, 160, 221)   // Plum - gentle purple
+            ftxui::Color::RGB(80, 120, 180),   // Muted blue - readable on light backgrounds
+            ftxui::Color::RGB(100, 140, 100),  // Soft forest green - gentle and readable
+            ftxui::Color::RGB(90, 150, 140),   // Muted teal - easy on eyes
+            ftxui::Color::RGB(140, 90, 140),   // Soft purple - not too bright
+            ftxui::Color::RGB(180, 140, 60),   // Warm brown-gold - much softer than yellow
+            ftxui::Color::RGB(70, 110, 160),   // Darker sky blue - better contrast
+            ftxui::Color::RGB(120, 160, 120),  // Medium green - good readability
+            ftxui::Color::RGB(100, 130, 150),  // Blue-gray - professional look
+            ftxui::Color::RGB(150, 100, 130)   // Muted rose - gentle on eyes
         };
     } else {
         // Standard high-contrast palette for maximum visibility
@@ -88,46 +88,46 @@ ftxui::Color VisualThemeManager::AssignLoggerColor(const std::string& logger_nam
 }
 
 ftxui::Color VisualThemeManager::GetLogLevelColor(const std::string& log_level) const {
-    // Handle Unreal Engine specific log levels with eye strain optimized colors
+    // Handle Unreal Engine specific log levels with light theme friendly pastel colors
     if (log_level == "Error") {
-        return eye_strain_reduction_enabled_ ? 
-               ftxui::Color::RGB(255, 99, 99) :   // Softer red for eye strain reduction
+        return eye_strain_reduction_enabled_ ?
+               ftxui::Color::RGB(180, 80, 80) :   // Muted red - gentle on eyes for light themes
                ftxui::Color::Red;                  // Bright red for maximum visibility
     } else if (log_level == "Warning") {
-        return eye_strain_reduction_enabled_ ? 
-               ftxui::Color::RGB(255, 215, 0) :   // Gold instead of bright yellow
+        return eye_strain_reduction_enabled_ ?
+               ftxui::Color::RGB(200, 140, 60) :  // Soft orange-brown - much easier on eyes
                ftxui::Color::Yellow;               // Bright yellow for clear distinction
     } else if (log_level == "Display") {
-        return eye_strain_reduction_enabled_ ? 
-               ftxui::Color::RGB(240, 240, 240) : // Slightly off-white for comfort
+        return eye_strain_reduction_enabled_ ?
+               ftxui::Color::RGB(50, 50, 50) :    // Darker gray for better readability
                ftxui::Color::White;
     } else if (log_level == "Verbose") {
-        return eye_strain_reduction_enabled_ ? 
-               ftxui::Color::RGB(169, 169, 169) : // Darker gray for better contrast
+        return eye_strain_reduction_enabled_ ?
+               ftxui::Color::RGB(120, 120, 120) : // Medium gray - gentle contrast
                ftxui::Color::GrayLight;
     } else if (log_level == "VeryVerbose") {
-        return eye_strain_reduction_enabled_ ? 
-               ftxui::Color::RGB(128, 128, 128) : // Medium gray
+        return eye_strain_reduction_enabled_ ?
+               ftxui::Color::RGB(150, 150, 150) : // Light gray - subtle but readable
                ftxui::Color::GrayDark;
     } else if (log_level == "Trace") {
-        return eye_strain_reduction_enabled_ ? 
-               ftxui::Color::RGB(72, 209, 204) :  // Medium turquoise
+        return eye_strain_reduction_enabled_ ?
+               ftxui::Color::RGB(80, 140, 160) :  // Soft teal-blue - gentle on eyes
                ftxui::Color::CyanLight;
     }
     
     // Fallback for generic log levels (for backward compatibility)
     if (log_level == "Info") {
-        return eye_strain_reduction_enabled_ ? 
-               ftxui::Color::RGB(240, 240, 240) : 
+        return eye_strain_reduction_enabled_ ?
+               ftxui::Color::RGB(50, 50, 50) :    // Darker gray for better readability
                ftxui::Color::White;
     } else if (log_level == "Debug") {
-        return eye_strain_reduction_enabled_ ? 
-               ftxui::Color::RGB(169, 169, 169) : 
+        return eye_strain_reduction_enabled_ ?
+               ftxui::Color::RGB(120, 120, 120) : // Medium gray
                ftxui::Color::GrayLight;
     }
-    
-    return eye_strain_reduction_enabled_ ? 
-           ftxui::Color::RGB(240, 240, 240) : 
+
+    return eye_strain_reduction_enabled_ ?
+           ftxui::Color::RGB(50, 50, 50) :       // Default darker gray for readability
            ftxui::Color::White; // Default color for unknown levels
 }
 
@@ -152,48 +152,48 @@ bool VisualThemeManager::ShouldLogLevelUseBold(const std::string& log_level) con
 }
 
 ftxui::Color VisualThemeManager::GetBackgroundColor() const {
-    return eye_strain_reduction_enabled_ ? 
-           ftxui::Color::RGB(24, 24, 24) :  // Very dark gray instead of pure black
+    return eye_strain_reduction_enabled_ ?
+           ftxui::Color::RGB(250, 250, 250) : // Light background for light theme
            ftxui::Color::Black;
 }
 
 ftxui::Color VisualThemeManager::GetTextColor() const {
-    return eye_strain_reduction_enabled_ ? 
-           ftxui::Color::RGB(240, 240, 240) : // Slightly off-white for comfort
+    return eye_strain_reduction_enabled_ ?
+           ftxui::Color::RGB(40, 40, 40) :    // Darker gray for better readability
            ftxui::Color::White;
 }
 
 ftxui::Color VisualThemeManager::GetHighlightColor() const {
-    return eye_strain_reduction_enabled_ ? 
-           ftxui::Color::RGB(100, 149, 237) : // Cornflower blue - easier on eyes
+    return eye_strain_reduction_enabled_ ?
+           ftxui::Color::RGB(140, 170, 200) : // Soft blue-gray - gentle on eyes
            ftxui::Color::Blue;
 }
 
 ftxui::Color VisualThemeManager::GetVisualSelectionColor() const {
     // Visual selection should use a distinct color from normal selection
-    // Using a warmer tone to differentiate from the cooler highlight color
-    return eye_strain_reduction_enabled_ ? 
-           ftxui::Color::RGB(255, 255, 255) : // White text for good contrast on visual selection background
+    // Using darker text for good contrast on light selection background
+    return eye_strain_reduction_enabled_ ?
+           ftxui::Color::RGB(40, 40, 40) :    // Dark text for light background
            ftxui::Color::White;
 }
 
 ftxui::Color VisualThemeManager::GetVisualSelectionBackgroundColor() const {
     // Visual selection background should be distinct from normal highlight
-    // Using a purple/magenta tone to clearly differentiate from blue highlight
-    return eye_strain_reduction_enabled_ ? 
-           ftxui::Color::RGB(138, 43, 226) :  // Blue violet - distinct but not harsh
+    // Using a soft lavender tone for light themes
+    return eye_strain_reduction_enabled_ ?
+           ftxui::Color::RGB(200, 180, 220) : // Soft lavender - gentle but distinct
            ftxui::Color::Magenta;             // Bright magenta for high contrast
 }
 
 ftxui::Color VisualThemeManager::GetFocusColor() const {
-    return eye_strain_reduction_enabled_ ? 
-           ftxui::Color::RGB(135, 206, 250) : // Light sky blue for focus
+    return eye_strain_reduction_enabled_ ?
+           ftxui::Color::RGB(100, 140, 180) : // Muted blue for focus - readable on light theme
            ftxui::Color::BlueLight;
 }
 
 ftxui::Color VisualThemeManager::GetHoverColor() const {
-    return eye_strain_reduction_enabled_ ? 
-           ftxui::Color::RGB(176, 196, 222) : // Light steel blue for hover
+    return eye_strain_reduction_enabled_ ?
+           ftxui::Color::RGB(160, 180, 200) : // Soft blue-gray for hover
            ftxui::Color::GrayLight;
 }
 

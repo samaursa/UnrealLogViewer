@@ -2097,9 +2097,9 @@ ftxui::Element MainWindow::RenderLogEntry(const LogEntry& entry, bool is_selecte
             Color level_color = GetColorForLogLevel(entry.Get_log_level().value());
             // Only apply color if it's an error or warning for visibility
             if (entry.Get_log_level().value() == "Error") {
-                row = row | color(Color::RedLight);
+                row = row | color(_Visual_Theme_Manager_->GetLogLevelColor("Error"));
             } else if (entry.Get_log_level().value() == "Warning") {
-                row = row | color(Color::YellowLight);
+                row = row | color(_Visual_Theme_Manager_->GetLogLevelColor("Warning"));
             }
         }
     }
@@ -2160,16 +2160,8 @@ ftxui::Element MainWindow::RenderTableHeader() const {
 }
 
 ftxui::Color MainWindow::GetColorForLogLevel(const std::string& level) const {
-    if (level == "Error") {
-        return Color::Red;
-    } else if (level == "Warning") {
-        return Color::Yellow;
-    } else if (level == "Info") {
-        return Color::Green;
-    } else if (level == "Debug") {
-        return Color::GrayLight;
-    }
-    return Color::White;
+    // Use the visual theme manager for consistent, eye-friendly colors
+    return _Visual_Theme_Manager_->GetLogLevelColor(level);
 }
 
 void MainWindow::SelectEntry(int index) {
@@ -3218,7 +3210,7 @@ ftxui::Element MainWindow::CreateHighlightedMessageElement(const std::string& me
         
         // Add highlighted match
         std::string match_text = message.substr(match_pos, inline_search_query_.length());
-        Element highlighted_match = text(match_text) | bgcolor(Color::Yellow) | color(Color::Black);
+        Element highlighted_match = text(match_text) | bgcolor(Color::YellowLight) | color(Color::Black);
         
         // If this is the current match, make it even more prominent
         if (!inline_search_matches_.empty() && 
@@ -3279,7 +3271,7 @@ ftxui::Element MainWindow::RenderSearchStatusBar() const {
             }
             options += " (Esc to cancel)";
             
-            return text(options) | bgcolor(Color::Yellow) | color(Color::Black);
+            return text(options) | bgcolor(Color::YellowLight) | color(Color::Black);
         }
     }
     
