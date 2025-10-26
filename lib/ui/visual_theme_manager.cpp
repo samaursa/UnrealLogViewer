@@ -88,14 +88,14 @@ ftxui::Color VisualThemeManager::AssignLoggerColor(const std::string& logger_nam
 }
 
 ftxui::Color VisualThemeManager::GetLogLevelColor(const std::string& log_level) const {
-    // Handle Unreal Engine specific log levels with light theme friendly pastel colors
+    // Handle Unreal Engine specific log levels with light theme friendly colors
     if (log_level == "Error") {
         return eye_strain_reduction_enabled_ ?
-               ftxui::Color::RGB(180, 80, 80) :   // Muted red - gentle on eyes for light themes
+               ftxui::Color::RGB(140, 60, 60) :   // Darker red - better contrast against light red backgrounds
                ftxui::Color::Red;                  // Bright red for maximum visibility
     } else if (log_level == "Warning") {
         return eye_strain_reduction_enabled_ ?
-               ftxui::Color::RGB(200, 140, 60) :  // Soft orange-brown - much easier on eyes
+               ftxui::Color::RGB(180, 120, 40) :  // Darker orange-brown - better contrast
                ftxui::Color::Yellow;               // Bright yellow for clear distinction
     } else if (log_level == "Display") {
         return eye_strain_reduction_enabled_ ?
@@ -199,13 +199,13 @@ ftxui::Color VisualThemeManager::GetHoverColor() const {
 
 ftxui::Color VisualThemeManager::GetBorderColor() const {
     return eye_strain_reduction_enabled_ ? 
-           ftxui::Color::RGB(105, 105, 105) : // Dim gray for borders
+           ftxui::Color::RGB(60, 60, 60) :     // Darker gray for borders on light theme
            ftxui::Color::GrayDark;
 }
 
 ftxui::Color VisualThemeManager::GetMutedTextColor() const {
     return eye_strain_reduction_enabled_ ? 
-           ftxui::Color::RGB(169, 169, 169) : // Dark gray for muted text
+           ftxui::Color::RGB(180, 180, 180) : // Lighter gray for muted text on light theme
            ftxui::Color::GrayLight;
 }
 

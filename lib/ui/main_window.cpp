@@ -901,8 +901,8 @@ bool MainWindow::LoadLogFile(const std::string& file_path) {
         // Show loading message
         _Last_Error_ = "Loading and parsing log file...";
         
-        // Parse the log entries
-        log_entries_ = _Log_Parser_->ParseEntries();
+        // Get the already-parsed entries from the log parser
+        log_entries_ = _Log_Parser_->Get_parsed_entries();
         
         if (log_entries_.empty()) {
             // If no entries were parsed, create sample data as fallback
@@ -2019,8 +2019,8 @@ ftxui::Element MainWindow::RenderLogEntry(const LogEntry& entry, bool is_selecte
         bool is_match = match_line_numbers_.find(entry.Get_line_number()) != match_line_numbers_.end();
         
         if (!is_match && context_lines_ > 0) {
-            // This is a context line - make it muted/gray
-            row = row | dim | color(Color::GrayDark);
+            // This is a context line - use muted color for better visibility on light theme
+            row = row | dim | color(_Visual_Theme_Manager_->GetMutedTextColor());
         }
         
         // Handle inline search highlighting (preserve existing functionality)
@@ -2089,8 +2089,8 @@ ftxui::Element MainWindow::RenderLogEntry(const LogEntry& entry, bool is_selecte
     
     // Apply styling based on whether this is a match or context line
     if (!is_match && context_lines_ > 0) {
-        // This is a context line - make it muted/gray
-        row = row | dim | color(Color::GrayDark);
+        // This is a context line - use muted color for better visibility on light theme
+        row = row | dim | color(_Visual_Theme_Manager_->GetMutedTextColor());
     } else {
         // This is a match line - apply normal log level colors
         if (entry.Get_log_level().has_value()) {

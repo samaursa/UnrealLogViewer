@@ -311,19 +311,19 @@ Element LogEntryRenderer::ApplyRowLevelHierarchy(Element element, const std::str
     
     if (level == "Error") {
         indicator_color = theme_manager_->GetLogLevelColor("Error");
-        // Errors get an extremely subtle red background tint for the entire row (unless selected)
+        // Errors get a subtle red background tint for the entire row (unless selected)
         if (!is_selected && theme_manager_->IsEyeStrainReductionEnabled()) {
-            element = element | bgcolor(Color::RGB(253, 251, 251)); // Extremely subtle light red tint
+            element = element | bgcolor(Color::RGB(248, 245, 245)); // Subtle light red tint
         } else if (!is_selected) {
-            element = element | bgcolor(Color::RGB(252, 248, 248)); // Very light red tint
+            element = element | bgcolor(Color::RGB(245, 240, 240)); // Light red tint
         }
     } else if (level == "Warning") {
         indicator_color = theme_manager_->GetLogLevelColor("Warning");
-        // Warnings get an extremely subtle orange background tint for the entire row (unless selected)
+        // Warnings get a subtle orange background tint for the entire row (unless selected)
         if (!is_selected && theme_manager_->IsEyeStrainReductionEnabled()) {
-            element = element | bgcolor(Color::RGB(254, 253, 251)); // Extremely subtle light orange tint
+            element = element | bgcolor(Color::RGB(250, 248, 245)); // Subtle light orange tint
         } else if (!is_selected) {
-            element = element | bgcolor(Color::RGB(253, 251, 248)); // Very light orange tint
+            element = element | bgcolor(Color::RGB(248, 245, 240)); // Light orange tint
         }
     } else if (level.empty()) {
         // For entries without log levels, use a very subtle border indicator
@@ -363,19 +363,19 @@ Element LogEntryRenderer::ApplyRowLevelHierarchyWithSearch(Element element, cons
         }
     } else if (level == "Error") {
         indicator_color = theme_manager_->GetLogLevelColor("Error");
-        // Errors get an extremely subtle red background tint for the entire row (unless selected)
+        // Errors get a subtle red background tint for the entire row (unless selected)
         if (!is_selected && theme_manager_->IsEyeStrainReductionEnabled()) {
-            element = element | bgcolor(Color::RGB(253, 251, 251)); // Extremely subtle light red tint
+            element = element | bgcolor(Color::RGB(248, 245, 245)); // Subtle light red tint
         } else if (!is_selected) {
-            element = element | bgcolor(Color::RGB(252, 248, 248)); // Very light red tint
+            element = element | bgcolor(Color::RGB(245, 240, 240)); // Light red tint
         }
     } else if (level == "Warning") {
         indicator_color = theme_manager_->GetLogLevelColor("Warning");
-        // Warnings get an extremely subtle orange background tint for the entire row (unless selected)
+        // Warnings get a subtle orange background tint for the entire row (unless selected)
         if (!is_selected && theme_manager_->IsEyeStrainReductionEnabled()) {
-            element = element | bgcolor(Color::RGB(254, 253, 251)); // Extremely subtle light orange tint
+            element = element | bgcolor(Color::RGB(250, 248, 245)); // Subtle light orange tint
         } else if (!is_selected) {
-            element = element | bgcolor(Color::RGB(253, 251, 248)); // Very light orange tint
+            element = element | bgcolor(Color::RGB(248, 245, 240)); // Light orange tint
         }
     } else if (level.empty()) {
         // For entries without log levels, use a very subtle border indicator
