@@ -410,12 +410,18 @@ public:
             parent_->IncreaseContext();
             return true;
         }
+        
+        // Line-based quick filters
         if (event == Event::Character('0')) {
-            // Only handle '0' for context lines if NOT in vim command mode
+            // Only handle '0' for line filters if NOT in vim command mode
             if (!parent_->IsVimCommandMode()) {
-                parent_->SetContextLines(0);
+                parent_->CreateLineAfterQuickFilter();
                 return true;
             }
+        }
+        if (event == Event::Character(')')) { // Shift+0
+            parent_->CreateLineBeforeQuickFilter();
+            return true;
         }
         
         // Vim-style navigation: 'g' goes to start of file
@@ -2756,7 +2762,12 @@ bool MainWindow::HandleVimStyleNavigation(const std::string& input) {
     char ch = input[0];
     
     // Handle digits - add to command buffer
+    // Special case: don't accept standalone '0' as it's used for line filters
     if (std::isdigit(ch)) {
+        if (ch == '0' && vim_command_buffer_.empty()) {
+            // Standalone '0' is not a vim command, let it pass through for line filter
+            return false;
+        }
         vim_command_buffer_ += ch;
         vim_command_mode_ = true;
         _Last_Error_ = "Vim command: " + vim_command_buffer_ + " (press j/k to execute)";
@@ -4336,6 +4347,66 @@ std::string MainWindow::GetFilterHighlightTerm() const {
     }
     
     return "";
+}
+
+void MainWindow::CreateLineAfterQuickFilter() {
+    // Check if we have a selected entry
+    if (selected_entry_index_ < 0 || selected_entry_index_ >= static_cast<int>(filtered_entries_.size())) {
+        _Last_Error_ = "No entry selected for line filter";
+        return;
+    }
+    
+    const auto& selected_entry = filtered_entries_[selected_entry_index_];
+    int line_number = static_cast<int>(selected_entry.Get_line_number());
+    
+    // Create filter expression if it doesn't exist
+    if (!current_filter_expression_) {
+        current_filter_expression_ = std::make_unique<FilterExpression>(FilterOperator::And);
+    }
+    
+    // Create LineAfter condition
+    auto condition = FilterConditionFactory::CreateLineAfter(line_number);
+    current_filter_expression_->AddCondition(std::move(condition));
+    
+    // Apply the new filter
+    OnFiltersChanged();
+    
+    // Update filter panel to show the new filter
+    if (_Filter_Panel_) {
+        _Filter_Panel_->SetCurrentFilterExpression(current_filter_expression_.get());
+    }
+    
+    _Last_Error_ = "Quick filter: Line >= " + std::to_string(line_number);
+}
+
+void MainWindow::CreateLineBeforeQuickFilter() {
+    // Check if we have a selected entry
+    if (selected_entry_index_ < 0 || selected_entry_index_ >= static_cast<int>(filtered_entries_.size())) {
+        _Last_Error_ = "No entry selected for line filter";
+        return;
+    }
+    
+    const auto& selected_entry = filtered_entries_[selected_entry_index_];
+    int line_number = static_cast<int>(selected_entry.Get_line_number());
+    
+    // Create filter expression if it doesn't exist
+    if (!current_filter_expression_) {
+        current_filter_expression_ = std::make_unique<FilterExpression>(FilterOperator::And);
+    }
+    
+    // Create LineBefore condition
+    auto condition = FilterConditionFactory::CreateLineBefore(line_number);
+    current_filter_expression_->AddCondition(std::move(condition));
+    
+    // Apply the new filter
+    OnFiltersChanged();
+    
+    // Update filter panel to show the new filter
+    if (_Filter_Panel_) {
+        _Filter_Panel_->SetCurrentFilterExpression(current_filter_expression_.get());
+    }
+    
+    _Last_Error_ = "Quick filter: Line < " + std::to_string(line_number);
 }
 
 } // namespace ue_log

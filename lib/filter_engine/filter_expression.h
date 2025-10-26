@@ -27,6 +27,8 @@ enum class FilterConditionType {
     FrameAfter,
     FrameBefore,
     FrameEquals,
+    LineAfter,
+    LineBefore,
     AnyFieldContains
 };
 
@@ -113,6 +115,8 @@ public:
     static std::unique_ptr<FilterCondition> CreateTimestampBefore(const std::string& timestamp);
     static std::unique_ptr<FilterCondition> CreateFrameAfter(int frame);
     static std::unique_ptr<FilterCondition> CreateFrameBefore(int frame);
+    static std::unique_ptr<FilterCondition> CreateLineAfter(int line);
+    static std::unique_ptr<FilterCondition> CreateLineBefore(int line);
     static std::unique_ptr<FilterCondition> CreateAnyFieldContains(const std::string& text);
     
     // Contextual filter creation from log entry

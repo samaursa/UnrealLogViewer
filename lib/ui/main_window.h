@@ -697,6 +697,12 @@ namespace ue_log
             ApplyQuickFilter(
                 const std::string& filter_type)
                 -> void;
+        auto
+            CreateLineAfterQuickFilter()
+                -> void;
+        auto
+            CreateLineBeforeQuickFilter()
+                -> void;
 
         auto
             IsQuickFilterDialogActive() const

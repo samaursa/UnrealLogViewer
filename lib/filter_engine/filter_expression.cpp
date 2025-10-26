@@ -110,6 +110,24 @@ bool FilterCondition::Matches(const LogEntry& entry) const {
             }
         }
         
+        case FilterConditionType::LineAfter: {
+            try {
+                int line_value = std::stoi(value_);
+                return static_cast<int>(entry.Get_line_number()) >= line_value;
+            } catch (const std::exception&) {
+                return false;
+            }
+        }
+        
+        case FilterConditionType::LineBefore: {
+            try {
+                int line_value = std::stoi(value_);
+                return static_cast<int>(entry.Get_line_number()) < line_value;
+            } catch (const std::exception&) {
+                return false;
+            }
+        }
+        
         case FilterConditionType::AnyFieldContains: {
             std::string search_text = entry.Get_message() + " " + entry.Get_logger_name();
             if (entry.Get_log_level().has_value()) {
@@ -155,6 +173,9 @@ std::string FilterCondition::GetFieldName() const {
         case FilterConditionType::FrameBefore:
         case FilterConditionType::FrameEquals:
             return "Frame";
+        case FilterConditionType::LineAfter:
+        case FilterConditionType::LineBefore:
+            return "Line";
         case FilterConditionType::AnyFieldContains:
             return "Any";
         default:
@@ -178,10 +199,12 @@ std::string FilterCondition::GetOperatorName() const {
             return "matches";
         case FilterConditionType::TimestampAfter:
         case FilterConditionType::FrameAfter:
+        case FilterConditionType::LineAfter:
             return ">=";
         case FilterConditionType::TimestampBefore:
         case FilterConditionType::FrameBefore:
-            return "<=";
+        case FilterConditionType::LineBefore:
+            return "<";
         default:
             return "?";
     }
@@ -331,6 +354,14 @@ std::unique_ptr<FilterCondition> FilterConditionFactory::CreateFrameAfter(int fr
 
 std::unique_ptr<FilterCondition> FilterConditionFactory::CreateFrameBefore(int frame) {
     return std::make_unique<FilterCondition>(FilterConditionType::FrameBefore, std::to_string(frame));
+}
+
+std::unique_ptr<FilterCondition> FilterConditionFactory::CreateLineAfter(int line) {
+    return std::make_unique<FilterCondition>(FilterConditionType::LineAfter, std::to_string(line));
+}
+
+std::unique_ptr<FilterCondition> FilterConditionFactory::CreateLineBefore(int line) {
+    return std::make_unique<FilterCondition>(FilterConditionType::LineBefore, std::to_string(line));
 }
 
 std::unique_ptr<FilterCondition> FilterConditionFactory::CreateAnyFieldContains(const std::string& text) {
