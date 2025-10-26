@@ -3558,7 +3558,7 @@ void MainWindow::CreateTimestampAfterFilter(const LogEntry& entry) {
     
     // Create a text contains filter that matches entries with this timestamp
     // Note: This is a simplified implementation since TimeRange isn't fully implemented
-    std::string filter_name = "Timestamp: " + timestamp;
+    std::string filter_name = "Timestamp contains";
     auto filter = std::make_unique<Filter>(filter_name, FilterType::TextContains, timestamp);
     
     // Add the filter to the filter engine
@@ -3591,7 +3591,7 @@ void MainWindow::CreateFrameAfterFilter(const LogEntry& entry) {
     int frame = entry.Get_frame_number().value();
     
     // Create a text contains filter that matches entries with this frame number
-    std::string filter_name = "Frame: " + std::to_string(frame);
+    std::string filter_name = "Frame equals";
     auto filter = std::make_unique<Filter>(filter_name, FilterType::TextContains, std::to_string(frame));
     
     // Add the filter to the filter engine
@@ -3620,7 +3620,7 @@ void MainWindow::CreateLoggerEqualsFilter(const LogEntry& entry) {
     }
     
     // Create a logger name filter
-    std::string filter_name = "Logger: " + logger;
+    std::string filter_name = "Logger equals";
     auto filter = std::make_unique<Filter>(filter_name, FilterType::LoggerName, logger);
     
     // Add the filter to the filter engine
@@ -3650,7 +3650,7 @@ void MainWindow::CreateLevelEqualsFilter(const LogEntry& entry) {
     std::string level = entry.Get_log_level().value();
     
     // Create a log level filter
-    std::string filter_name = "Level: " + level;
+    std::string filter_name = "Level equals";
     auto filter = std::make_unique<Filter>(filter_name, FilterType::LogLevel, level);
     
     // Add the filter to the filter engine
@@ -3688,7 +3688,7 @@ void MainWindow::CreateMessageContainsFilter(const LogEntry& entry) {
     }
     
     // Create a text contains filter for the message
-    std::string filter_name = "Message: \"" + filter_text + "\"";
+    std::string filter_name = "Message contains";
     auto filter = std::make_unique<Filter>(filter_name, FilterType::TextContains, filter_text);
     
     // Add the filter to the filter engine
@@ -3813,22 +3813,22 @@ void MainWindow::CreateFilterFromSearchAndColumn(FilterConditionType type, const
     
     switch (type) {
         case FilterConditionType::AnyFieldContains:
-            filter_name = "Any field contains: " + search_term;
+            filter_name = "Any field contains";
             filter_type_enum = FilterType::TextContains;
             type_description = "Any field contains";
             break;
         case FilterConditionType::MessageContains:
-            filter_name = "Message contains: " + search_term;
+            filter_name = "Message contains";
             filter_type_enum = FilterType::TextContains;
             type_description = "Message contains";
             break;
         case FilterConditionType::LoggerContains:
-            filter_name = "Logger contains: " + search_term;
+            filter_name = "Logger contains";
             filter_type_enum = FilterType::LoggerName;
             type_description = "Logger contains";
             break;
         case FilterConditionType::LogLevelEquals:
-            filter_name = "Level equals: " + search_term;
+            filter_name = "Level equals";
             filter_type_enum = FilterType::LogLevel;
             type_description = "Level equals";
             break;
@@ -3999,7 +3999,7 @@ void MainWindow::CreateDirectColumnExcludeFilter(int column_number) {
     switch (column_number) {
         case 0: // Timestamp column - exclude entries with this timestamp (exact match)
             if (selected_entry.Get_timestamp().has_value()) {
-                filter_name = "Exclude timestamp: " + selected_entry.Get_timestamp().value();
+                filter_name = "Exclude timestamp";
                 filter_type_enum = FilterType::TimeRange; // Use TimeRange for timestamp filtering
                 filter_value = selected_entry.Get_timestamp().value();
             } else {
@@ -4009,7 +4009,7 @@ void MainWindow::CreateDirectColumnExcludeFilter(int column_number) {
             break;
         case 1: // Frame column - exclude entries with this frame
             if (selected_entry.Get_frame_number().has_value()) {
-                filter_name = "Exclude frame: " + std::to_string(selected_entry.Get_frame_number().value());
+                filter_name = "Exclude frame";
                 filter_type_enum = FilterType::FrameRange; // Use FrameRange for frame filtering
                 filter_value = std::to_string(selected_entry.Get_frame_number().value());
             } else {
@@ -4018,13 +4018,13 @@ void MainWindow::CreateDirectColumnExcludeFilter(int column_number) {
             }
             break;
         case 2: // Logger column - exclude this logger
-            filter_name = "Exclude logger: " + selected_entry.Get_logger_name();
+            filter_name = "Exclude logger";
             filter_type_enum = FilterType::LoggerName;
             filter_value = selected_entry.Get_logger_name();
             break;
         case 3: // Level column - exclude this level
             if (selected_entry.Get_log_level().has_value()) {
-                filter_name = "Exclude level: " + selected_entry.Get_log_level().value();
+                filter_name = "Exclude level";
                 filter_type_enum = FilterType::LogLevel;
                 filter_value = selected_entry.Get_log_level().value();
             } else {
@@ -4033,7 +4033,7 @@ void MainWindow::CreateDirectColumnExcludeFilter(int column_number) {
             }
             break;
         case 4: // Message column - exclude messages containing this text
-            filter_name = "Exclude message containing: " + selected_entry.Get_message().substr(0, 50) + "...";
+            filter_name = "Exclude message";
             filter_type_enum = FilterType::TextContains;
             filter_value = selected_entry.Get_message();
             break;
