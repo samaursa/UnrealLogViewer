@@ -22,6 +22,8 @@ namespace ue_log {
         std::regex unstructured_pattern;      // Logger: Level: message
         size_t current_line_number;
         std::string current_file_path;
+        size_t cached_file_size;
+        bool is_file_loaded;
         
     public:
         // Default constructor

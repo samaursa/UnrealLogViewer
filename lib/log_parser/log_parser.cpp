@@ -2,11 +2,13 @@
 #include <fstream>
 #include <sstream>
 #include <filesystem>
+#include <iostream>
 
 namespace ue_log {
     
     LogParser::LogParser() 
-        : memory_map(nullptr), current_line_number(0), current_file_path("") {
+        : memory_map(nullptr), current_line_number(0), current_file_path(""), 
+          cached_file_size(0), is_file_loaded(false) {
         // Initialize regex patterns
         InitializeRegexPatterns();
     }
@@ -52,7 +54,17 @@ namespace ue_log {
             current_file_path = file_path;
             current_line_number = 0;
             parsed_entries.clear();
+            cached_file_size = file_size;
             
+            // Parse all entries immediately
+            auto entries = ParseEntries();
+            
+            // Unmap the file to release the file handle
+            // This allows Unreal to reuse the log filename
+            memory_map->unmap();
+            memory_map.reset();
+            
+            is_file_loaded = true;
             return Result::Success();
             
         } catch (const std::exception& e) {
@@ -67,10 +79,11 @@ namespace ue_log {
             memory_map.reset();
         }
         ResetState();
+        is_file_loaded = false;
     }
     
     bool LogParser::IsFileLoaded() const {
-        return memory_map && (!current_file_path.empty());
+        return is_file_loaded && (!current_file_path.empty());
     }
     
     size_t LogParser::GetFileSize() const {
@@ -78,12 +91,7 @@ namespace ue_log {
             return 0;
         }
         
-        // For empty files, return 0
-        if (!memory_map->is_mapped()) {
-            return 0;
-        }
-        
-        return memory_map->size();
+        return cached_file_size;
     }
     
     Result LogParser::InitializeRegexPatterns() {
@@ -452,7 +460,9 @@ namespace ue_log {
     std::vector<LogEntry> LogParser::ParseEntries(size_t start_offset) {
         std::vector<LogEntry> entries;
         
-        if (!IsFileLoaded()) {
+        // Don't check IsFileLoaded() here - we're called during loading
+        // Just verify memory map is available
+        if (!memory_map || !memory_map->is_mapped()) {
             return entries;
         }
         
@@ -484,12 +494,8 @@ namespace ue_log {
     std::vector<std::string> LogParser::SplitIntoLines(size_t start_offset, size_t max_lines) {
         std::vector<std::string> lines;
         
-        if (!IsFileLoaded()) {
-            return lines;
-        }
-        
-        // Handle empty files
-        if (!memory_map->is_mapped()) {
+        // Check if memory map is available (not if file is "loaded")
+        if (!memory_map || !memory_map->is_mapped()) {
             return lines;
         }
         
@@ -541,12 +547,13 @@ namespace ue_log {
     }
     
     size_t LogParser::GetTotalLineCount() {
-        if (!IsFileLoaded()) {
-            return 0;
+        // After loading, we can only report entries count since memory map is released
+        if (is_file_loaded) {
+            return parsed_entries.size();
         }
         
-        // Handle empty files
-        if (!memory_map->is_mapped()) {
+        // During loading, count from memory map
+        if (!memory_map || !memory_map->is_mapped()) {
             return 0;
         }
         
@@ -576,10 +583,12 @@ namespace ue_log {
         current_file_path.clear();
         current_line_number = 0;
         parsed_entries.clear();
+        cached_file_size = 0;
     }
     
     std::string LogParser::GetLineFromOffset(size_t offset, size_t& next_offset) {
-        if (!IsFileLoaded() || offset >= memory_map->size()) {
+        // This method requires memory map - only works during initial loading
+        if (!memory_map || !memory_map->is_mapped() || offset >= memory_map->size()) {
             next_offset = offset;
             return "";
         }
